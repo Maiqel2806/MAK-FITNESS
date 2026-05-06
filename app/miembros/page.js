@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { usePerfil } from '@/components/UserContext'
 import {
   Plus,
   Search,
@@ -14,6 +13,10 @@ import {
   ImageIcon,
   Power,
   PowerOff,
+  Phone,
+  Mail,
+  MapPin,
+  ShieldCheck,
 } from 'lucide-react'
 
 const supabase = createClient()
@@ -42,10 +45,6 @@ const formularioInicial = {
 }
 
 export default function MiembrosPage() {
-  const perfil = usePerfil()
-  const esAdministrador = perfil?.rol === 'dueno'
-  const esEmpleado = perfil?.rol === 'empleado'
-
   const [miembros, setMiembros] = useState([])
   const [formulario, setFormulario] = useState(formularioInicial)
   const [archivoFoto, setArchivoFoto] = useState(null)
@@ -132,6 +131,10 @@ export default function MiembrosPage() {
     setMostrarFormulario(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function seleccionarFoto(evento) {
@@ -313,8 +316,8 @@ export default function MiembrosPage() {
     <div>
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Miembros</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Miembros</h1>
+          <p className="mt-2 text-sm text-gray-600 md:text-base">
             Administra los socios registrados, su código único y su foto de verificación.
           </p>
         </div>
@@ -341,13 +344,13 @@ export default function MiembrosPage() {
       )}
 
       {mostrarFormulario && (
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-gray-900">
                 {editandoId ? 'Editar miembro' : 'Registrar nuevo miembro'}
               </h2>
-              <p className="text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500">
                 La foto será usada para validar visualmente la entrada del socio.
               </p>
             </div>
@@ -362,7 +365,7 @@ export default function MiembrosPage() {
 
           <form onSubmit={guardarMiembro} className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_1fr]">
             <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-2xl bg-white">
+              <div className="mx-auto flex aspect-square w-full max-w-[260px] items-center justify-center overflow-hidden rounded-2xl bg-white">
                 {previewFoto ? (
                   <img
                     src={previewFoto}
@@ -571,7 +574,7 @@ export default function MiembrosPage() {
       )}
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-gray-200 p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between md:p-5">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Listado de miembros</h2>
             <p className="text-sm text-gray-500">
@@ -608,127 +611,240 @@ export default function MiembrosPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                <tr>
-                  <th className="px-5 py-3">Socio</th>
-                  <th className="px-5 py-3">Código</th>
-                  <th className="px-5 py-3">Cédula</th>
-                  <th className="px-5 py-3">Teléfono</th>
-                  <th className="px-5 py-3">Correo</th>
-                  <th className="px-5 py-3">Foto</th>
-                  <th className="px-5 py-3">Estado</th>
-                  <th className="px-5 py-3 text-right">Acciones</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {miembrosFiltrados.map((miembro) => (
-                  <tr key={miembro.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-11 w-11 overflow-hidden rounded-full bg-gray-100">
-                          {miembro.foto_url ? (
-                            <img
-                              src={miembro.foto_url}
-                              alt="Foto del socio"
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center">
-                              <UserRound size={20} className="text-gray-400" />
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <div className="font-semibold text-gray-900">
-                            {miembro.nombre} {miembro.apellido}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {miembro.direccion || 'Sin dirección'}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <span className="inline-flex rounded-full bg-black px-3 py-1 text-sm font-bold tracking-widest text-white">
-                        {miembro.codigo_acceso || '-'}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4 text-gray-700">
-                      {miembro.cedula || '-'}
-                    </td>
-
-                    <td className="px-5 py-4 text-gray-700">
-                      {miembro.telefono || '-'}
-                    </td>
-
-                    <td className="px-5 py-4 text-gray-700">
-                      {miembro.email || '-'}
-                    </td>
-
-                    <td className="px-5 py-4">
+          <>
+            <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
+              {miembrosFiltrados.map((miembro) => (
+                <div
+                  key={miembro.id}
+                  className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex gap-4">
+                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
                       {miembro.foto_url ? (
-                        <span className="inline-flex rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                          Registrada
-                        </span>
+                        <img
+                          src={miembro.foto_url}
+                          alt="Foto del socio"
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
-                        <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                          Pendiente
-                        </span>
+                        <div className="flex h-full w-full items-center justify-center">
+                          <UserRound size={28} className="text-gray-400" />
+                        </div>
                       )}
-                    </td>
+                    </div>
 
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          miembro.estado === 'activo'
-                            ? 'bg-green-50 text-green-700'
-                            : miembro.estado === 'suspendido'
-                              ? 'bg-yellow-50 text-yellow-700'
-                              : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {miembro.estado}
-                      </span>
-                    </td>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <h3 className="font-bold text-gray-900">
+                            {miembro.nombre} {miembro.apellido}
+                          </h3>
 
-                    <td className="px-5 py-4">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => editarMiembro(miembro)}
-                          className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-                          title="Editar"
-                        >
-                          <Pencil size={17} />
-                        </button>
+                          <span className="mt-2 inline-flex rounded-full bg-black px-3 py-1 text-sm font-bold tracking-widest text-white">
+                            {miembro.codigo_acceso || '-'}
+                          </span>
+                        </div>
 
-                        <button
-                          onClick={() => cambiarEstadoMiembro(miembro)}
-                          className={`rounded-lg p-2 transition ${
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
                             miembro.estado === 'activo'
-                              ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
-                              : 'text-green-600 hover:bg-green-50 hover:text-green-700'
+                              ? 'bg-green-50 text-green-700'
+                              : miembro.estado === 'suspendido'
+                                ? 'bg-yellow-50 text-yellow-700'
+                                : 'bg-gray-100 text-gray-700'
                           }`}
-                          title={miembro.estado === 'activo' ? 'Inactivar' : 'Activar'}
                         >
-                          {miembro.estado === 'activo' ? (
-                            <PowerOff size={17} />
-                          ) : (
-                            <Power size={17} />
-                          )}
-                        </button>
+                          {miembro.estado}
+                        </span>
                       </div>
-                    </td>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={16} className="text-gray-400" />
+                      <span>Cédula: {miembro.cedula || '-'}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Phone size={16} className="text-gray-400" />
+                      <span>{miembro.telefono || 'Sin teléfono'}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Mail size={16} className="text-gray-400" />
+                      <span className="truncate">{miembro.email || 'Sin correo'}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <MapPin size={16} className="text-gray-400" />
+                      <span className="truncate">{miembro.direccion || 'Sin dirección'}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    {miembro.foto_url ? (
+                      <span className="inline-flex rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                        Foto registrada
+                      </span>
+                    ) : (
+                      <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                        Foto pendiente
+                      </span>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => editarMiembro(miembro)}
+                        className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+                        title="Editar"
+                      >
+                        <Pencil size={17} />
+                      </button>
+
+                      <button
+                        onClick={() => cambiarEstadoMiembro(miembro)}
+                        className={`rounded-lg border p-2 transition ${
+                          miembro.estado === 'activo'
+                            ? 'border-red-100 text-red-500 hover:bg-red-50 hover:text-red-700'
+                            : 'border-green-100 text-green-600 hover:bg-green-50 hover:text-green-700'
+                        }`}
+                        title={miembro.estado === 'activo' ? 'Inactivar' : 'Activar'}
+                      >
+                        {miembro.estado === 'activo' ? (
+                          <PowerOff size={17} />
+                        ) : (
+                          <Power size={17} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[1100px] text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-5 py-3">Socio</th>
+                    <th className="px-5 py-3">Código</th>
+                    <th className="px-5 py-3">Cédula</th>
+                    <th className="px-5 py-3">Teléfono</th>
+                    <th className="px-5 py-3">Correo</th>
+                    <th className="px-5 py-3">Foto</th>
+                    <th className="px-5 py-3">Estado</th>
+                    <th className="px-5 py-3 text-right">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+
+                <tbody className="divide-y divide-gray-100">
+                  {miembrosFiltrados.map((miembro) => (
+                    <tr key={miembro.id} className="hover:bg-gray-50">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-11 w-11 overflow-hidden rounded-full bg-gray-100">
+                            {miembro.foto_url ? (
+                              <img
+                                src={miembro.foto_url}
+                                alt="Foto del socio"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <UserRound size={20} className="text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="font-semibold text-gray-900">
+                              {miembro.nombre} {miembro.apellido}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {miembro.direccion || 'Sin dirección'}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span className="inline-flex rounded-full bg-black px-3 py-1 text-sm font-bold tracking-widest text-white">
+                          {miembro.codigo_acceso || '-'}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4 text-gray-700">
+                        {miembro.cedula || '-'}
+                      </td>
+
+                      <td className="px-5 py-4 text-gray-700">
+                        {miembro.telefono || '-'}
+                      </td>
+
+                      <td className="px-5 py-4 text-gray-700">
+                        {miembro.email || '-'}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {miembro.foto_url ? (
+                          <span className="inline-flex rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                            Registrada
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                            Pendiente
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                            miembro.estado === 'activo'
+                              ? 'bg-green-50 text-green-700'
+                              : miembro.estado === 'suspendido'
+                                ? 'bg-yellow-50 text-yellow-700'
+                                : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {miembro.estado}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => editarMiembro(miembro)}
+                            className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+                            title="Editar"
+                          >
+                            <Pencil size={17} />
+                          </button>
+
+                          <button
+                            onClick={() => cambiarEstadoMiembro(miembro)}
+                            className={`rounded-lg p-2 transition ${
+                              miembro.estado === 'activo'
+                                ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
+                                : 'text-green-600 hover:bg-green-50 hover:text-green-700'
+                            }`}
+                            title={miembro.estado === 'activo' ? 'Inactivar' : 'Activar'}
+                          >
+                            {miembro.estado === 'activo' ? (
+                              <PowerOff size={17} />
+                            ) : (
+                              <Power size={17} />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
