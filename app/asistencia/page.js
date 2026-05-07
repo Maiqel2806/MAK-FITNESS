@@ -445,8 +445,10 @@ export default function AsistenciaPage() {
     <div>
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Asistencia</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
+            Asistencia
+          </h1>
+          <p className="mt-2 text-sm text-gray-600 md:text-base">
             Registra entradas verificadas usando el código único del socio.
           </p>
         </div>
@@ -528,56 +530,56 @@ export default function AsistenciaPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Entradas de hoy</p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
+      <div className="mt-6 grid grid-cols-3 gap-3 md:gap-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Entradas</p>
+          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-3xl">
             {cargandoHistorial ? '-' : resumenHoy.entradas}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Socios distintos</p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Socios</p>
+          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-3xl">
             {cargandoHistorial ? '-' : resumenHoy.sociosDistintos}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Tipo de control</p>
-          <h2 className="mt-2 text-2xl font-bold text-gray-900">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Control</p>
+          <h2 className="mt-2 text-base font-bold text-gray-900 md:text-2xl">
             Código + foto
           </h2>
         </div>
       </div>
 
-      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
         <div className="mb-5">
           <h2 className="text-xl font-bold text-gray-900">Validar socio</h2>
           <p className="mt-1 text-sm text-gray-500">
-            Busca por código único de 5 dígitos, verifica la foto y confirma la entrada.
+            Ingresa el código único de 5 dígitos, verifica la foto y confirma la entrada.
           </p>
 
           <div className="mt-4 rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-900">
             <div className="flex gap-3">
-              <AlertTriangle size={22} />
+              <AlertTriangle size={22} className="shrink-0" />
 
               <div>
                 <h3 className="font-bold">Regla de control</h3>
 
                 <p className="mt-1 text-sm">
-                  El código de 5 dígitos sirve para localizar al socio sin usar su cédula. La entrada sigue validándose con foto, estado activo y membresía vigente.
+                  El código sirve para localizar al socio sin usar su cédula. La entrada se autoriza solo con foto, estado activo y membresía vigente.
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        <form onSubmit={buscarMiembro} className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto]">
+        <form onSubmit={buscarMiembro} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
           <div className="relative">
             <Search
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={20}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
             />
             <input
               ref={codigoInputRef}
@@ -585,25 +587,25 @@ export default function AsistenciaPage() {
               onChange={(e) => setCodigo(limpiarCodigo(e.target.value))}
               inputMode="numeric"
               maxLength={5}
-              className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-4 text-lg font-bold tracking-widest outline-none focus:border-black"
-              placeholder="Código del socio"
+              className="w-full rounded-2xl border border-gray-300 py-4 pl-12 pr-4 text-center text-3xl font-black tracking-[0.35em] outline-none focus:border-black md:text-left md:text-2xl"
+              placeholder="00000"
             />
           </div>
 
           <button
             type="submit"
-            disabled={buscando}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={buscando || codigo.length !== 5}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-black px-6 py-4 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Search size={18} />
-            {buscando ? 'Buscando...' : 'Buscar'}
+            {buscando ? 'Buscando...' : 'Buscar socio'}
           </button>
         </form>
 
         {miembro && estadoMiembro && (
-          <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[280px_1fr]">
+          <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
             <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-2xl bg-white">
+              <div className="mx-auto flex aspect-square w-full max-w-[280px] items-center justify-center overflow-hidden rounded-2xl bg-white">
                 {miembro.foto_url ? (
                   <img
                     src={miembro.foto_url}
@@ -612,19 +614,19 @@ export default function AsistenciaPage() {
                   />
                 ) : (
                   <div className="flex flex-col items-center text-gray-400">
-                    <UserRound size={48} />
+                    <UserRound size={56} />
                     <span className="mt-2 text-sm">Sin foto</span>
                   </div>
                 )}
               </div>
 
               <div className="mt-4 text-center">
-                <h3 className="text-xl font-bold text-gray-900">
+                <h3 className="text-2xl font-bold text-gray-900">
                   {miembro.nombre} {miembro.apellido}
                 </h3>
 
-                <p className="mt-1 text-sm font-semibold text-gray-700">
-                  Código: {miembro.codigo_acceso}
+                <p className="mt-2 text-lg font-black tracking-widest text-gray-900">
+                  {miembro.codigo_acceso}
                 </p>
 
                 <span
@@ -642,11 +644,11 @@ export default function AsistenciaPage() {
             <div className="space-y-4">
               <div className={`rounded-2xl border p-5 ${obtenerClaseEstado(estadoMiembro.tipo)}`}>
                 <div className="flex gap-3">
-                  <div className="mt-0.5">
+                  <div className="mt-0.5 shrink-0">
                     {estadoMiembro.autorizado ? (
-                      <CheckCircle size={24} />
+                      <CheckCircle size={26} />
                     ) : (
-                      <XCircle size={24} />
+                      <XCircle size={26} />
                     )}
                   </div>
 
@@ -666,7 +668,7 @@ export default function AsistenciaPage() {
                 <div className="rounded-2xl border border-gray-200 bg-white p-5">
                   <h3 className="font-bold text-gray-900">Detalle de membresía</h3>
 
-                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
                       <p className="text-xs font-semibold text-gray-500">Plan</p>
                       <p className="mt-1 font-bold text-gray-900">
@@ -704,11 +706,12 @@ export default function AsistenciaPage() {
                 />
 
                 <button
+                  type="button"
                   onClick={registrarEntrada}
                   disabled={registrando || !estadoMiembro.autorizado}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-black px-5 py-4 text-base font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <Save size={18} />
+                  <Save size={20} />
                   {registrando ? 'Registrando...' : 'Registrar entrada verificada'}
                 </button>
 
@@ -722,7 +725,7 @@ export default function AsistenciaPage() {
       </div>
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-gray-200 p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between md:p-5">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Entradas registradas hoy</h2>
             <p className="text-sm text-gray-500">
@@ -752,7 +755,7 @@ export default function AsistenciaPage() {
             </p>
           </div>
         ) : (
-          <div className="max-h-[460px] overflow-y-auto">
+          <div className="max-h-[360px] overflow-y-auto md:max-h-[460px]">
             <div className="divide-y divide-gray-100">
               {asistenciasHoy.map((asistencia) => (
                 <div
@@ -760,7 +763,7 @@ export default function AsistenciaPage() {
                   className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-gray-100">
                       {asistencia.miembros?.foto_url ? (
                         <img
                           src={asistencia.miembros.foto_url}
@@ -774,7 +777,7 @@ export default function AsistenciaPage() {
                       )}
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-bold text-gray-900">
                         {asistencia.miembros?.nombre} {asistencia.miembros?.apellido}
                       </p>

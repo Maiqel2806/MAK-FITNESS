@@ -1,15 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Plus,
   Save,
   X,
   Pencil,
-  UserCog,
   ShieldCheck,
   User,
   Power,
+  Search,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 
@@ -28,6 +28,7 @@ export default function UsuariosPage() {
   const [formulario, setFormulario] = useState(formularioInicial)
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
+  const [busqueda, setBusqueda] = useState('')
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -81,6 +82,10 @@ export default function UsuariosPage() {
     setMostrarFormulario(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function editarUsuario(usuario) {
@@ -96,6 +101,10 @@ export default function UsuariosPage() {
     setMostrarFormulario(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function limpiarFormulario() {
@@ -119,6 +128,36 @@ export default function UsuariosPage() {
       password: formulario.password,
       rol: formulario.rol,
       activo: formulario.activo,
+    }
+
+    if (!payload.usuario && !editandoId) {
+      setError('El usuario es obligatorio.')
+      setGuardando(false)
+      return
+    }
+
+    if (!payload.nombre) {
+      setError('El nombre es obligatorio.')
+      setGuardando(false)
+      return
+    }
+
+    if (!editandoId && !payload.password) {
+      setError('La contraseña es obligatoria para crear un usuario.')
+      setGuardando(false)
+      return
+    }
+
+    if (!editandoId && payload.password.length < 6) {
+      setError('La contraseña debe tener mínimo 6 caracteres.')
+      setGuardando(false)
+      return
+    }
+
+    if (editandoId && payload.password && payload.password.length < 6) {
+      setError('La nueva contraseña debe tener mínimo 6 caracteres.')
+      setGuardando(false)
+      return
     }
 
     const respuesta = await fetch('/api/admin/usuarios', {
@@ -154,9 +193,11 @@ export default function UsuariosPage() {
     setGuardando(false)
   }
 
-  async function desactivarUsuario(usuario) {
+  async function cambiarEstadoUsuario(usuario) {
+    const nuevoEstado = !usuario.activo
+
     const confirmar = window.confirm(
-      `¿Seguro que deseas desactivar el usuario "${usuario.usuario}"?`
+      `¿Seguro que deseas ${nuevoEstado ? 'activar' : 'desactivar'} el usuario "${usuario.usuario}"?`
     )
 
     if (!confirmar) return
@@ -166,31 +207,61 @@ export default function UsuariosPage() {
 
     const token = await obtenerToken()
 
-    const respuesta = await fetch(`/api/admin/usuarios?id=${usuario.id}`, {
-      method: 'DELETE',
+    const respuesta = await fetch('/api/admin/usuarios', {
+      method: 'PATCH',
       headers: {
         Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        id: usuario.id,
+        nombre: usuario.nombre,
+        password: '',
+        rol: usuario.rol,
+        activo: nuevoEstado,
+      }),
     })
 
     const data = await respuesta.json()
 
     if (!respuesta.ok) {
-      setError(data.error || 'No se pudo desactivar el usuario.')
+      setError(data.error || 'No se pudo cambiar el estado del usuario.')
       return
     }
 
     await cargarUsuarios()
-    setMensaje('Usuario desactivado correctamente.')
+    setMensaje(nuevoEstado ? 'Usuario activado correctamente.' : 'Usuario desactivado correctamente.')
   }
 
+  const usuariosFiltrados = useMemo(() => {
+    const texto = busqueda.toLowerCase().trim()
+
+    if (!texto) return usuarios
+
+    return usuarios.filter((usuario) => {
+      const valores = [
+        usuario.usuario,
+        usuario.nombre,
+        usuario.rol,
+        usuario.auth_email,
+        usuario.activo ? 'activo' : 'inactivo',
+      ]
+
+      return valores.some((valor) =>
+        String(valor || '').toLowerCase().includes(texto)
+      )
+    })
+  }, [usuarios, busqueda])
+
   return (
-    <div>
+    <div className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Usuarios</h1>
-          <p className="mt-2 text-gray-600">
-            Crea y administra accesos del sistema.
+          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
+            Usuarios
+          </h1>
+          <p className="mt-2 text-sm text-gray-600 md:text-base">
+            Crea y administra accesos internos del sistema.
           </p>
         </div>
 
@@ -216,14 +287,14 @@ export default function UsuariosPage() {
       )}
 
       {mostrarFormulario && (
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-gray-900">
                 {editandoId ? 'Editar usuario' : 'Crear nuevo usuario'}
               </h2>
-              <p className="text-sm text-gray-500">
-                El empleado ingresará con usuario y contraseña.
+              <p className="mt-1 text-sm text-gray-500">
+                El personal ingresará con usuario y contraseña.
               </p>
             </div>
 
@@ -244,11 +315,16 @@ export default function UsuariosPage() {
                 value={formulario.usuario}
                 onChange={(e) => actualizarCampo('usuario', e.target.value)}
                 disabled={Boolean(editandoId)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black disabled:bg-gray-100"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black disabled:bg-gray-100 disabled:text-gray-500"
                 placeholder="ej: recepcion"
                 autoCapitalize="none"
                 autoCorrect="off"
               />
+              {editandoId && (
+                <p className="mt-1 text-xs text-gray-500">
+                  El nombre de usuario no se puede cambiar después de creado.
+                </p>
+              )}
             </div>
 
             <div>
@@ -304,7 +380,7 @@ export default function UsuariosPage() {
               </select>
             </div>
 
-            <div className="flex gap-3 md:col-span-2">
+            <div className="flex flex-col gap-3 sm:flex-row md:col-span-2">
               <button
                 type="submit"
                 disabled={guardando}
@@ -327,65 +403,88 @@ export default function UsuariosPage() {
       )}
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 p-5">
-          <h2 className="text-lg font-bold text-gray-900">Usuarios del sistema</h2>
-          <p className="text-sm text-gray-500">
-            Control de accesos internos.
-          </p>
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between md:p-5">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Usuarios del sistema</h2>
+            <p className="text-sm text-gray-500">
+              Total registrados: {usuarios.length}
+            </p>
+          </div>
+
+          <div className="relative w-full md:w-96">
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-4 text-sm outline-none focus:border-black"
+              placeholder="Buscar por usuario, nombre, rol o correo"
+            />
+          </div>
         </div>
 
         {cargando ? (
           <div className="p-8 text-center text-sm text-gray-500">
             Cargando usuarios...
           </div>
-        ) : usuarios.length === 0 ? (
+        ) : usuariosFiltrados.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">
             No hay usuarios registrados.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                <tr>
-                  <th className="px-5 py-3">Usuario</th>
-                  <th className="px-5 py-3">Nombre</th>
-                  <th className="px-5 py-3">Rol</th>
-                  <th className="px-5 py-3">Estado</th>
-                  <th className="px-5 py-3 text-right">Acciones</th>
-                </tr>
-              </thead>
+          <>
+            <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
+              {usuariosFiltrados.map((usuario) => (
+                <div
+                  key={usuario.id}
+                  className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start gap-4">
+                    <div
+                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                        usuario.rol === 'dueno'
+                          ? 'bg-black text-white'
+                          : 'bg-blue-50 text-blue-700'
+                      }`}
+                    >
+                      {usuario.rol === 'dueno' ? (
+                        <ShieldCheck size={22} />
+                      ) : (
+                        <User size={22} />
+                      )}
+                    </div>
 
-              <tbody className="divide-y divide-gray-100">
-                {usuarios.map((usuario) => (
-                  <tr key={usuario.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
-                          {usuario.rol === 'dueno' ? (
-                            <ShieldCheck size={19} className="text-gray-500" />
-                          ) : (
-                            <User size={19} className="text-gray-500" />
-                          )}
-                        </div>
-
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
-                          <p className="font-semibold text-gray-900">
+                          <h3 className="font-bold text-gray-900">
                             {usuario.usuario}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {usuario.auth_email}
+                          </h3>
+
+                          <p className="mt-1 text-sm text-gray-500">
+                            {usuario.nombre}
                           </p>
                         </div>
+
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            usuario.activo
+                              ? 'bg-green-50 text-green-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {usuario.activo ? 'Activo' : 'Inactivo'}
+                        </span>
                       </div>
-                    </td>
 
-                    <td className="px-5 py-4 text-gray-700">
-                      {usuario.nombre}
-                    </td>
+                      <p className="mt-2 truncate text-xs text-gray-500">
+                        {usuario.auth_email || 'Sin correo auth'}
+                      </p>
 
-                    <td className="px-5 py-4">
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
                           usuario.rol === 'dueno'
                             ? 'bg-black text-white'
                             : 'bg-blue-50 text-blue-700'
@@ -393,44 +492,127 @@ export default function UsuariosPage() {
                       >
                         {usuario.rol === 'dueno' ? 'Administrador' : 'Empleado'}
                       </span>
-                    </td>
+                    </div>
+                  </div>
 
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          usuario.activo
-                            ? 'bg-green-50 text-green-700'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {usuario.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      onClick={() => editarUsuario(usuario)}
+                      className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+                      title="Editar"
+                    >
+                      <Pencil size={17} />
+                    </button>
 
-                    <td className="px-5 py-4">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => editarUsuario(usuario)}
-                          className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-                          title="Editar"
-                        >
-                          <Pencil size={17} />
-                        </button>
+                    <button
+                      onClick={() => cambiarEstadoUsuario(usuario)}
+                      className={`rounded-lg border p-2 transition ${
+                        usuario.activo
+                          ? 'border-red-100 text-red-500 hover:bg-red-50 hover:text-red-700'
+                          : 'border-green-100 text-green-600 hover:bg-green-50 hover:text-green-700'
+                      }`}
+                      title={usuario.activo ? 'Desactivar' : 'Activar'}
+                    >
+                      <Power size={17} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
 
-                        <button
-                          onClick={() => desactivarUsuario(usuario)}
-                          className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
-                          title="Desactivar"
-                        >
-                          <Power size={17} />
-                        </button>
-                      </div>
-                    </td>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[850px] text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-5 py-3">Usuario</th>
+                    <th className="px-5 py-3">Nombre</th>
+                    <th className="px-5 py-3">Rol</th>
+                    <th className="px-5 py-3">Estado</th>
+                    <th className="px-5 py-3 text-right">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+
+                <tbody className="divide-y divide-gray-100">
+                  {usuariosFiltrados.map((usuario) => (
+                    <tr key={usuario.id} className="hover:bg-gray-50">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
+                            {usuario.rol === 'dueno' ? (
+                              <ShieldCheck size={19} className="text-gray-500" />
+                            ) : (
+                              <User size={19} className="text-gray-500" />
+                            )}
+                          </div>
+
+                          <div>
+                            <p className="font-semibold text-gray-900">
+                              {usuario.usuario}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {usuario.auth_email || 'Sin correo auth'}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 text-gray-700">
+                        {usuario.nombre}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                            usuario.rol === 'dueno'
+                              ? 'bg-black text-white'
+                              : 'bg-blue-50 text-blue-700'
+                          }`}
+                        >
+                          {usuario.rol === 'dueno' ? 'Administrador' : 'Empleado'}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                            usuario.activo
+                              ? 'bg-green-50 text-green-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {usuario.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => editarUsuario(usuario)}
+                            className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+                            title="Editar"
+                          >
+                            <Pencil size={17} />
+                          </button>
+
+                          <button
+                            onClick={() => cambiarEstadoUsuario(usuario)}
+                            className={`rounded-lg p-2 transition ${
+                              usuario.activo
+                                ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
+                                : 'text-green-600 hover:bg-green-50 hover:text-green-700'
+                            }`}
+                            title={usuario.activo ? 'Desactivar' : 'Activar'}
+                          >
+                            <Power size={17} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

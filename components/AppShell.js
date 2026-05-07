@@ -123,7 +123,7 @@ export default function AppShell({ children }) {
 
   if (esRutaPublica) {
     return (
-      <main className="min-h-screen bg-gray-100">
+      <main className="safe-screen min-h-screen bg-gray-100">
         {children}
       </main>
     )
@@ -131,8 +131,8 @@ export default function AppShell({ children }) {
 
   if (cargando) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
+      <div className="safe-screen flex min-h-screen items-center justify-center bg-gray-100 p-4">
+        <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-semibold text-gray-900">Cargando sistema...</p>
           <p className="mt-1 text-sm text-gray-500">Verificando permisos</p>
         </div>
@@ -142,8 +142,8 @@ export default function AppShell({ children }) {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center shadow-sm">
+      <div className="safe-screen flex min-h-screen items-center justify-center bg-gray-100 p-4">
+        <div className="w-full max-w-sm rounded-2xl border border-red-200 bg-red-50 p-6 text-center shadow-sm">
           <p className="text-sm font-semibold text-red-700">{error}</p>
         </div>
       </div>
@@ -154,11 +154,13 @@ export default function AppShell({ children }) {
 
   return (
     <UserProvider perfil={perfil}>
-      <div className="min-h-screen bg-gray-100 md:flex">
+      <div className="safe-screen min-h-screen bg-gray-100 md:flex">
         <Sidebar perfil={perfil} />
 
-        <main className="min-h-screen flex-1 overflow-auto p-4 pt-20 md:p-6">
-          {children}
+        <main className="safe-content min-h-screen flex-1 px-4 py-5 pt-24 md:px-6 md:py-6 md:pt-6 lg:px-8">
+          <div className="safe-content mx-auto max-w-[1440px]">
+            {children}
+          </div>
         </main>
       </div>
     </UserProvider>

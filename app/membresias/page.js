@@ -160,7 +160,8 @@ export default function MembresiasPage() {
             nombre,
             apellido,
             cedula,
-            telefono
+            telefono,
+            codigo_acceso
           ),
           planes (
             id,
@@ -269,6 +270,10 @@ export default function MembresiasPage() {
     setMostrarPlan(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function editarPlan(plan) {
@@ -289,6 +294,10 @@ export default function MembresiasPage() {
     setMostrarPlan(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function limpiarPlan() {
@@ -307,6 +316,10 @@ export default function MembresiasPage() {
     setMostrarMembresia(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function renovarMembresia(membresia) {
@@ -327,6 +340,10 @@ export default function MembresiasPage() {
     setMostrarMembresia(true)
     setError('')
     setMensaje('La fecha de inicio fue calculada automáticamente para no perder días de vigencia.')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function limpiarMembresia() {
@@ -517,7 +534,7 @@ export default function MembresiasPage() {
     const nombre = `${membresia.miembros?.nombre || ''} ${membresia.miembros?.apellido || ''}`.trim()
 
     const confirmar = window.confirm(
-      `¿Seguro que deseas eliminar la membresía de ${nombre || 'este miembro'}? También se eliminará el pago asociado.`
+      `¿Seguro que deseas eliminar la membresía de ${nombre || 'este miembro'}?`
     )
 
     if (!confirmar) return
@@ -605,6 +622,7 @@ export default function MembresiasPage() {
         miembro.nombre,
         miembro.apellido,
         miembro.cedula,
+        miembro.codigo_acceso,
         miembro.telefono,
         plan.nombre,
         membresia.plan_nombre_snapshot,
@@ -635,8 +653,10 @@ export default function MembresiasPage() {
     <div>
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Membresías y pagos</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
+            Membresías y pagos
+          </h1>
+          <p className="mt-2 text-sm text-gray-600 md:text-base">
             Administra planes, renovaciones inteligentes, fechas de vencimiento y pagos.
           </p>
         </div>
@@ -674,51 +694,51 @@ export default function MembresiasPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-5">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Activas</p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Activas</p>
+          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-3xl">
             {cargando ? '-' : membresiasActivas}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Por caducar</p>
-          <h2 className="mt-2 text-3xl font-bold text-orange-700">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Por caducar</p>
+          <h2 className="mt-2 text-2xl font-bold text-orange-700 md:text-3xl">
             {cargando ? '-' : membresiasPorCaducar}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Vencidas</p>
-          <h2 className="mt-2 text-3xl font-bold text-red-700">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Vencidas</p>
+          <h2 className="mt-2 text-2xl font-bold text-red-700 md:text-3xl">
             {cargando ? '-' : membresiasVencidas}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Suspendidas</p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Suspendidas</p>
+          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-3xl">
             {cargando ? '-' : membresiasSuspendidas}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Pagos</p>
-          <h2 className="mt-2 text-2xl font-bold text-gray-900">
+        <div className="col-span-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:col-span-1 md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Pagos</p>
+          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-2xl">
             {cargando ? '-' : formatearDinero(totalPagos)}
           </h2>
         </div>
       </div>
 
       {esDueno && mostrarPlan && (
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-gray-900">
                 {editandoPlanId ? 'Editar plan' : 'Registrar nuevo plan'}
               </h2>
-              <p className="text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500">
                 Los cambios aplicarán a nuevas membresías. Las membresías ya creadas conservan su historial.
               </p>
             </div>
@@ -826,13 +846,13 @@ export default function MembresiasPage() {
       )}
 
       {mostrarMembresia && (
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-gray-900">
                 {formMembresia.renovacion_de_membresia_id ? 'Renovar membresía' : 'Registrar nueva membresía'}
               </h2>
-              <p className="text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500">
                 La fecha de inicio se calcula para no perder días si el socio aún tiene vigencia.
               </p>
             </div>
@@ -858,7 +878,7 @@ export default function MembresiasPage() {
                 <option value="">Seleccionar miembro</option>
                 {miembrosActivos.map((miembro) => (
                   <option key={miembro.id} value={miembro.id}>
-                    {miembro.nombre} {miembro.apellido} - {miembro.cedula || 'Sin cédula'}
+                    {miembro.nombre} {miembro.apellido} - Código {miembro.codigo_acceso || '-'}
                   </option>
                 ))}
               </select>
@@ -893,7 +913,7 @@ export default function MembresiasPage() {
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Si el socio aún tiene vigencia, el sistema evitará solapamientos.
+                El sistema evitará solapamientos de vigencia.
               </p>
             </div>
 
@@ -978,7 +998,7 @@ export default function MembresiasPage() {
       )}
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-gray-200 p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between md:p-5">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Planes disponibles</h2>
             <p className="text-sm text-gray-500">
@@ -992,7 +1012,7 @@ export default function MembresiasPage() {
             No hay planes registrados.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-3 md:p-5">
             {planes.map((plan) => (
               <div
                 key={plan.id}
@@ -1051,7 +1071,7 @@ export default function MembresiasPage() {
       </div>
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-gray-200 p-5">
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-4 md:p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-bold text-gray-900">Listado de membresías</h2>
@@ -1069,12 +1089,12 @@ export default function MembresiasPage() {
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-4 text-sm outline-none focus:border-black"
-                placeholder="Buscar por socio, cédula, teléfono o plan"
+                placeholder="Buscar por socio, código, cédula, teléfono o plan"
               />
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {[
               ['todas', 'Todas'],
               ['activa', 'Activas'],
@@ -1086,7 +1106,7 @@ export default function MembresiasPage() {
               <button
                 key={valor}
                 onClick={() => setFiltroEstado(valor)}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
                   filtroEstado === valor
                     ? 'bg-black text-white'
                     : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
@@ -1113,129 +1133,253 @@ export default function MembresiasPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1150px] text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                <tr>
-                  <th className="px-5 py-3">Miembro</th>
-                  <th className="px-5 py-3">Plan histórico</th>
-                  <th className="px-5 py-3">Inicio</th>
-                  <th className="px-5 py-3">Vence</th>
-                  <th className="px-5 py-3">Vigencia</th>
-                  <th className="px-5 py-3">Pago</th>
-                  <th className="px-5 py-3 text-right">Acciones</th>
-                </tr>
-              </thead>
+          <>
+            <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
+              {membresiasFiltradas.map((membresia) => {
+                const pago = pagos.find((item) => item.membresia_id === membresia.id)
+                const miembro = membresia.miembros || {}
+                const planActual = membresia.planes || {}
 
-              <tbody className="divide-y divide-gray-100">
-                {membresiasFiltradas.map((membresia) => {
-                  const pago = pagos.find((item) => item.membresia_id === membresia.id)
-                  const miembro = membresia.miembros || {}
-                  const planActual = membresia.planes || {}
+                const nombrePlan = membresia.plan_nombre_snapshot || planActual.nombre || '-'
+                const precioPlan = membresia.plan_precio_snapshot || planActual.precio || 0
+                const duracionPlan = membresia.plan_duracion_dias_snapshot || planActual.duracion_dias || 0
 
-                  const nombrePlan = membresia.plan_nombre_snapshot || planActual.nombre || '-'
-                  const precioPlan = membresia.plan_precio_snapshot || planActual.precio || 0
-                  const duracionPlan = membresia.plan_duracion_dias_snapshot || planActual.duracion_dias || 0
-
-                  return (
-                    <tr key={membresia.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-4">
-                        <div className="font-semibold text-gray-900">
+                return (
+                  <div
+                    key={membresia.id}
+                    className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold text-gray-900">
                           {miembro.nombre} {miembro.apellido}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {miembro.cedula || 'Sin cédula'} · {miembro.telefono || 'Sin teléfono'}
-                        </div>
-                      </td>
+                        </h3>
 
-                      <td className="px-5 py-4">
-                        <div className="font-semibold text-gray-900">
-                          {nombrePlan}
+                        <p className="mt-1 text-sm text-gray-500">
+                          Código: {miembro.codigo_acceso || '-'}
+                        </p>
+
+                        <p className="mt-1 text-xs text-gray-500">
+                          {miembro.telefono || 'Sin teléfono'}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${obtenerClaseEstado(membresia.estado_real)}`}
+                      >
+                        {obtenerEtiquetaEstado(membresia.estado_real)}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl bg-gray-50 p-4">
+                      <p className="text-sm font-semibold text-gray-900">
+                        {nombrePlan}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {formatearDinero(precioPlan)} · {duracionPlan} días
+                      </p>
+
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500">Inicio</p>
+                          <p className="font-bold text-gray-900">
+                            {formatearFecha(membresia.fecha_inicio)}
+                          </p>
                         </div>
-                        <div className="text-xs text-gray-500">
-                          {formatearDinero(precioPlan)} · {duracionPlan} días
+
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500">Vence</p>
+                          <p className="font-bold text-gray-900">
+                            {formatearFecha(membresia.fecha_fin)}
+                          </p>
                         </div>
-                      </td>
+                      </div>
 
-                      <td className="px-5 py-4 text-gray-700">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays size={16} className="text-gray-400" />
-                          {formatearFecha(membresia.fecha_inicio)}
-                        </div>
-                      </td>
+                      <p className="mt-3 text-sm font-semibold text-gray-700">
+                        {membresia.texto_vigencia}
+                      </p>
+                    </div>
 
-                      <td className="px-5 py-4 text-gray-700">
-                        {formatearFecha(membresia.fecha_fin)}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${obtenerClaseEstado(membresia.estado_real)}`}
-                        >
-                          {obtenerEtiquetaEstado(membresia.estado_real)}
-                        </span>
-
-                        <div className="mt-1 text-xs text-gray-500">
-                          {membresia.texto_vigencia}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="font-semibold text-gray-900">
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500">Pago</p>
+                        <p className="font-bold text-gray-900">
                           {formatearDinero(pago?.monto)}
-                        </div>
-                        <div className="text-xs text-gray-500">
+                        </p>
+                        <p className="text-xs text-gray-500">
                           {pago?.metodo_pago || '-'}
-                        </div>
-                      </td>
+                        </p>
+                      </div>
 
-                      <td className="px-5 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => renovarMembresia(membresia)}
-                            className="rounded-lg p-2 text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
-                            title="Renovar"
-                          >
-                            <RefreshCw size={17} />
-                          </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => renovarMembresia(membresia)}
+                          className="rounded-lg border border-blue-100 p-2 text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
+                          title="Renovar"
+                        >
+                          <RefreshCw size={17} />
+                        </button>
 
-                          {esDueno && (
-                            <>
-                              {membresia.estado === 'suspendida' ? (
-                                <button
-                                  onClick={() => activarMembresia(membresia)}
-                                  className="rounded-lg p-2 text-green-600 transition hover:bg-green-50 hover:text-green-700"
-                                  title="Activar"
-                                >
-                                  <Pencil size={17} />
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => suspenderMembresia(membresia)}
-                                  className="rounded-lg p-2 text-yellow-600 transition hover:bg-yellow-50 hover:text-yellow-700"
-                                  title="Suspender"
-                                >
-                                  <Pencil size={17} />
-                                </button>
-                              )}
-
+                        {esDueno && (
+                          <>
+                            {membresia.estado === 'suspendida' ? (
                               <button
-                                onClick={() => eliminarMembresia(membresia)}
-                                className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
-                                title="Eliminar"
+                                onClick={() => activarMembresia(membresia)}
+                                className="rounded-lg border border-green-100 p-2 text-green-600 transition hover:bg-green-50 hover:text-green-700"
+                                title="Activar"
                               >
-                                <Trash2 size={17} />
+                                <Pencil size={17} />
                               </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                            ) : (
+                              <button
+                                onClick={() => suspenderMembresia(membresia)}
+                                className="rounded-lg border border-yellow-100 p-2 text-yellow-600 transition hover:bg-yellow-50 hover:text-yellow-700"
+                                title="Suspender"
+                              >
+                                <Pencil size={17} />
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => eliminarMembresia(membresia)}
+                              className="rounded-lg border border-red-100 p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
+                              title="Eliminar"
+                            >
+                              <Trash2 size={17} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[1150px] text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-5 py-3">Miembro</th>
+                    <th className="px-5 py-3">Plan histórico</th>
+                    <th className="px-5 py-3">Inicio</th>
+                    <th className="px-5 py-3">Vence</th>
+                    <th className="px-5 py-3">Vigencia</th>
+                    <th className="px-5 py-3">Pago</th>
+                    <th className="px-5 py-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-100">
+                  {membresiasFiltradas.map((membresia) => {
+                    const pago = pagos.find((item) => item.membresia_id === membresia.id)
+                    const miembro = membresia.miembros || {}
+                    const planActual = membresia.planes || {}
+
+                    const nombrePlan = membresia.plan_nombre_snapshot || planActual.nombre || '-'
+                    const precioPlan = membresia.plan_precio_snapshot || planActual.precio || 0
+                    const duracionPlan = membresia.plan_duracion_dias_snapshot || planActual.duracion_dias || 0
+
+                    return (
+                      <tr key={membresia.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-4">
+                          <div className="font-semibold text-gray-900">
+                            {miembro.nombre} {miembro.apellido}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Código: {miembro.codigo_acceso || '-'} · {miembro.telefono || 'Sin teléfono'}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="font-semibold text-gray-900">
+                            {nombrePlan}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {formatearDinero(precioPlan)} · {duracionPlan} días
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4 text-gray-700">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays size={16} className="text-gray-400" />
+                            {formatearFecha(membresia.fecha_inicio)}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4 text-gray-700">
+                          {formatearFecha(membresia.fecha_fin)}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${obtenerClaseEstado(membresia.estado_real)}`}
+                          >
+                            {obtenerEtiquetaEstado(membresia.estado_real)}
+                          </span>
+
+                          <div className="mt-1 text-xs text-gray-500">
+                            {membresia.texto_vigencia}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="font-semibold text-gray-900">
+                            {formatearDinero(pago?.monto)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {pago?.metodo_pago || '-'}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => renovarMembresia(membresia)}
+                              className="rounded-lg p-2 text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
+                              title="Renovar"
+                            >
+                              <RefreshCw size={17} />
+                            </button>
+
+                            {esDueno && (
+                              <>
+                                {membresia.estado === 'suspendida' ? (
+                                  <button
+                                    onClick={() => activarMembresia(membresia)}
+                                    className="rounded-lg p-2 text-green-600 transition hover:bg-green-50 hover:text-green-700"
+                                    title="Activar"
+                                  >
+                                    <Pencil size={17} />
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => suspenderMembresia(membresia)}
+                                    className="rounded-lg p-2 text-yellow-600 transition hover:bg-yellow-50 hover:text-yellow-700"
+                                    title="Suspender"
+                                  >
+                                    <Pencil size={17} />
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={() => eliminarMembresia(membresia)}
+                                  className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 size={17} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

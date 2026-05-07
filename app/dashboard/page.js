@@ -1,23 +1,18 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { usePerfil } from '@/components/UserContext'
 import {
+  RefreshCw,
   Users,
   CreditCard,
   CalendarCheck,
-  AlertTriangle,
-  TrendingUp,
-  Clock,
-  UserRound,
-  RefreshCw,
-  Package,
   ShoppingCart,
+  Package,
+  AlertTriangle,
   ShieldCheck,
-  ClipboardCheck,
-  Plus,
+  TrendingUp,
 } from 'lucide-react'
 
 const supabase = createClient()
@@ -30,13 +25,6 @@ function obtenerFechaHoy() {
   return `${year}-${month}-${day}`
 }
 
-function obtenerInicioMes() {
-  const hoy = new Date()
-  const year = hoy.getFullYear()
-  const month = String(hoy.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}-01`
-}
-
 function crearInicioDiaISO(fecha) {
   return new Date(`${fecha}T00:00:00`).toISOString()
 }
@@ -45,13 +33,10 @@ function crearFinDiaISO(fecha) {
   return new Date(`${fecha}T23:59:59`).toISOString()
 }
 
-function sumarDias(fecha, dias) {
-  const date = new Date(`${fecha}T00:00:00`)
-  date.setDate(date.getDate() + Number(dias || 0))
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+function diferenciaDias(fechaDesde, fechaHasta) {
+  const inicio = new Date(`${fechaDesde}T00:00:00`)
+  const fin = new Date(`${fechaHasta}T00:00:00`)
+  return Math.round((fin - inicio) / (1000 * 60 * 60 * 24))
 }
 
 function formatearDinero(valor) {
@@ -77,20 +62,6 @@ function formatearFecha(fecha) {
   return `${day}/${month}/${year}`
 }
 
-function formatearFechaHora(fecha) {
-  if (!fecha) return '-'
-
-  const date = new Date(fecha)
-
-  return date.toLocaleString('es-EC', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 function formatearHora(fecha) {
   if (!fecha) return '-'
 
@@ -102,282 +73,276 @@ function formatearHora(fecha) {
   })
 }
 
+function obtenerEstadoMembresia(membresia) {
+  const hoy = obtenerFechaHoy()
+
+  if (membresia.estado === 'suspendida') {
+    return {
+      estado: 'suspendida',
+      texto: 'Suspendida',
+      clase: 'bg-gray-100 text-gray-700',
+    }
+  }
+
+  const dias = diferenciaDias(hoy, membresia.fecha_fin)
+
+  if (dias < 0) {
+    return {
+      estado: 'vencida',
+      texto: `Vencida hace ${Math.abs(dias)} día${Math.abs(dias) === 1 ? '' : 's'}`,
+      clase: 'bg-red-50 text-red-700',
+    }
+  }
+
+  if (dias === 0) {
+    return {
+      estado: 'vence_hoy',
+      texto: 'Vence hoy',
+      clase: 'bg-yellow-50 text-yellow-700',
+    }
+  }
+
+  if (dias <= 7) {
+    return {
+      estado: 'por_caducar',
+      texto: `Vence en ${dias} día${dias === 1 ? '' : 's'}`,
+      clase: 'bg-orange-50 text-orange-700',
+    }
+  }
+
+  return {
+    estado: 'activa',
+    texto: `Vence en ${dias} días`,
+    clase: 'bg-green-50 text-green-700',
+  }
+}
+
+function TarjetaResumen({ titulo, valor, detalle, icono: Icon, tono = 'normal' }) {
+  const valorClase =
+    tono === 'rojo'
+      ? 'text-red-700'
+      : tono === 'verde'
+        ? 'text-green-700'
+        : tono === 'naranja'
+          ? 'text-orange-700'
+          : 'text-gray-900'
+
+  return (
+    <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-gray-500 md:text-sm">
+            {titulo}
+          </p>
+
+          <h2 className={`mt-2 break-words text-2xl font-bold md:text-3xl ${valorClase}`}>
+            {valor}
+          </h2>
+
+          {detalle && (
+            <p className="mt-1 break-words text-xs text-gray-500 md:text-sm">
+              {detalle}
+            </p>
+          )}
+        </div>
+
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
+          <Icon size={20} className="text-gray-600" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const perfil = usePerfil()
-  const esDueno = perfil?.rol === 'dueno'
   const esEmpleado = perfil?.rol === 'empleado'
 
   const [miembros, setMiembros] = useState([])
   const [membresias, setMembresias] = useState([])
-  const [pagos, setPagos] = useState([])
-  const [asistencias, setAsistencias] = useState([])
-  const [ventas, setVentas] = useState([])
+  const [asistenciasHoy, setAsistenciasHoy] = useState([])
+  const [ventasHoy, setVentasHoy] = useState([])
   const [productos, setProductos] = useState([])
-
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     cargarDashboard()
-  }, [esDueno])
+  }, [])
+
+  async function consultarTabla(tabla, consulta) {
+    const { data, error } = await consulta
+
+    if (error) {
+      console.warn(`Error consultando ${tabla}:`, error.message)
+      return []
+    }
+
+    return data || []
+  }
 
   async function cargarDashboard() {
     setCargando(true)
     setError('')
 
     const hoy = obtenerFechaHoy()
-    const inicioMes = obtenerInicioMes()
+    const inicioISO = crearInicioDiaISO(hoy)
+    const finISO = crearFinDiaISO(hoy)
 
-    const inicioHoyISO = crearInicioDiaISO(hoy)
-    const finHoyISO = crearFinDiaISO(hoy)
-    const inicioMesISO = crearInicioDiaISO(inicioMes)
-    const finHoyCompletoISO = crearFinDiaISO(hoy)
-
-    const consultasBase = [
-      supabase
-        .from('miembros')
-        .select('*')
-        .order('created_at', { ascending: false }),
-
-      supabase
-        .from('membresias')
-        .select(`
-          *,
-          miembros (
-            id,
-            nombre,
-            apellido,
-            cedula,
-            telefono
-          ),
-          planes (
-            id,
-            nombre,
-            precio,
-            duracion_dias
-          )
-        `)
-        .order('created_at', { ascending: false }),
-
-      supabase
-        .from('asistencia')
-        .select(`
-          *,
-          miembros (
-            id,
-            nombre,
-            apellido,
-            cedula,
-            telefono,
-            foto_url
-          )
-        `)
-        .gte('fecha_entrada', inicioHoyISO)
-        .lte('fecha_entrada', finHoyISO)
-        .order('fecha_entrada', { ascending: false }),
-
-      supabase
-        .from('productos')
-        .select('*')
-        .order('nombre', { ascending: true }),
-    ]
-
-    const consultasDueno = esDueno
-      ? [
+    try {
+      const [
+        dataMiembros,
+        dataMembresias,
+        dataAsistencias,
+        dataVentas,
+        dataProductos,
+      ] = await Promise.all([
+        consultarTabla(
+          'miembros',
           supabase
-            .from('pagos')
+            .from('miembros')
+            .select('*')
+            .order('created_at', { ascending: false })
+        ),
+
+        consultarTabla(
+          'membresias',
+          supabase
+            .from('membresias')
             .select(`
               *,
               miembros (
                 id,
                 nombre,
                 apellido,
-                cedula
+                codigo_acceso,
+                telefono
+              ),
+              planes (
+                id,
+                nombre
               )
             `)
-            .gte('fecha_pago', inicioMesISO)
-            .lte('fecha_pago', finHoyCompletoISO)
-            .order('fecha_pago', { ascending: false }),
+            .order('fecha_fin', { ascending: true })
+        ),
 
+        consultarTabla(
+          'asistencia',
+          supabase
+            .from('asistencia')
+            .select(`
+              *,
+              miembros (
+                id,
+                nombre,
+                apellido,
+                codigo_acceso,
+                foto_url
+              )
+            `)
+            .gte('fecha_entrada', inicioISO)
+            .lte('fecha_entrada', finISO)
+            .order('fecha_entrada', { ascending: false })
+        ),
+
+        consultarTabla(
+          'ventas',
           supabase
             .from('ventas')
-            .select(`
-              *,
-              miembros (
-                id,
-                nombre,
-                apellido,
-                cedula
-              ),
-              ventas_detalle (
-                id,
-                producto_id,
-                cantidad,
-                precio_unitario,
-                productos (
-                  id,
-                  nombre,
-                  categoria
-                )
-              )
-            `)
-            .gte('fecha', inicioMesISO)
-            .lte('fecha', finHoyCompletoISO)
-            .order('fecha', { ascending: false }),
-        ]
-      : []
+            .select('*')
+            .gte('fecha', inicioISO)
+            .lte('fecha', finISO)
+            .order('fecha', { ascending: false })
+        ),
 
-    const respuestas = await Promise.all([
-      ...consultasBase,
-      ...consultasDueno,
-    ])
+        consultarTabla(
+          'productos',
+          supabase
+            .from('productos')
+            .select('*')
+            .order('nombre', { ascending: true })
+        ),
+      ])
 
-    const respuestaMiembros = respuestas[0]
-    const respuestaMembresias = respuestas[1]
-    const respuestaAsistencias = respuestas[2]
-    const respuestaProductos = respuestas[3]
-    const respuestaPagos = esDueno ? respuestas[4] : { data: [], error: null }
-    const respuestaVentas = esDueno ? respuestas[5] : { data: [], error: null }
-
-    const errores = [
-      respuestaMiembros.error,
-      respuestaMembresias.error,
-      respuestaAsistencias.error,
-      respuestaProductos.error,
-      respuestaPagos.error,
-      respuestaVentas.error,
-    ].filter(Boolean)
-
-    if (errores.length > 0) {
-      setError(errores[0].message)
+      setMiembros(dataMiembros)
+      setMembresias(dataMembresias)
+      setAsistenciasHoy(dataAsistencias)
+      setVentasHoy(dataVentas)
+      setProductos(dataProductos)
+    } catch (error) {
+      setError(error.message)
     }
-
-    setMiembros(respuestaMiembros.data || [])
-    setMembresias(respuestaMembresias.data || [])
-    setAsistencias(respuestaAsistencias.data || [])
-    setProductos(respuestaProductos.data || [])
-    setPagos(respuestaPagos.data || [])
-    setVentas(respuestaVentas.data || [])
 
     setCargando(false)
   }
 
-  const datos = useMemo(() => {
+  const resumen = useMemo(() => {
     const hoy = obtenerFechaHoy()
-    const limiteProximosVencimientos = sumarDias(hoy, 7)
 
-    const miembrosActivos = miembros.filter((miembro) => miembro.estado === 'activo')
-    const miembrosInactivos = miembros.filter((miembro) => miembro.estado !== 'activo')
+    const miembrosActivos = miembros.filter((item) => item.estado === 'activo').length
+    const miembrosInactivos = miembros.filter((item) => item.estado !== 'activo').length
 
-    const membresiasConEstadoReal = membresias.map((membresia) => {
-      if (membresia.estado === 'suspendida') {
-        return {
-          ...membresia,
-          estado_real: 'suspendida',
-        }
-      }
+    const membresiasConEstado = membresias.map((membresia) => ({
+      ...membresia,
+      estado_calculado: obtenerEstadoMembresia(membresia),
+    }))
 
-      if (membresia.fecha_fin < hoy) {
-        return {
-          ...membresia,
-          estado_real: 'vencida',
-        }
-      }
+    const membresiasActivas = membresiasConEstado.filter((item) => {
+      return item.estado_calculado.estado === 'activa'
+    }).length
 
-      return {
-        ...membresia,
-        estado_real: 'activa',
-      }
+    const porCaducar = membresiasConEstado.filter((item) => {
+      return item.estado_calculado.estado === 'por_caducar' || item.estado_calculado.estado === 'vence_hoy'
     })
 
-    const membresiasActivas = membresiasConEstadoReal.filter(
-      (membresia) => membresia.estado_real === 'activa'
-    )
+    const vencidas = membresiasConEstado.filter((item) => {
+      return item.estado_calculado.estado === 'vencida'
+    })
 
-    const membresiasVencidas = membresiasConEstadoReal.filter(
-      (membresia) => membresia.estado_real === 'vencida'
-    )
+    const sociosDistintosHoy = new Set(
+      asistenciasHoy.map((item) => item.miembro_id)
+    ).size
 
-    const membresiasSuspendidas = membresiasConEstadoReal.filter(
-      (membresia) => membresia.estado_real === 'suspendida'
-    )
-
-    const proximosVencimientos = membresiasConEstadoReal
-      .filter((membresia) => {
-        return (
-          membresia.estado_real === 'activa' &&
-          membresia.fecha_fin >= hoy &&
-          membresia.fecha_fin <= limiteProximosVencimientos
-        )
-      })
-      .sort((a, b) => String(a.fecha_fin).localeCompare(String(b.fecha_fin)))
-      .slice(0, 6)
-
-    const miembrosConAsistenciaHoy = new Set(
-      asistencias.map((asistencia) => asistencia.miembro_id)
-    )
-
-    const ingresosMembresias = pagos.reduce((total, pago) => {
-      return total + Number(pago.monto || 0)
-    }, 0)
-
-    const ingresosVentas = ventas.reduce((total, venta) => {
+    const totalVentasHoy = ventasHoy.reduce((total, venta) => {
       return total + Number(venta.total || 0)
     }, 0)
 
-    const productosBajoStock = productos
-      .filter((producto) => {
-        return (
-          producto.activo &&
-          Number(producto.stock || 0) <= Number(producto.stock_minimo || 0)
-        )
-      })
-      .sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0))
-      .slice(0, 6)
-
-    const productosActivos = productos.filter((producto) => producto.activo)
-
-    const ultimosMiembros = miembros.slice(0, 5)
-    const ultimasAsistencias = asistencias.slice(0, 8)
-    const ultimosPagos = pagos.slice(0, 5)
-    const ultimasVentas = ventas.slice(0, 5)
+    const productosBajoStock = productos.filter((producto) => {
+      const stock = Number(producto.stock || 0)
+      return stock <= 5
+    })
 
     return {
+      hoy,
       miembrosActivos,
       miembrosInactivos,
       membresiasActivas,
-      membresiasVencidas,
-      membresiasSuspendidas,
-      proximosVencimientos,
-      miembrosConAsistenciaHoy,
-      ingresosMembresias,
-      ingresosVentas,
-      ingresosTotales: ingresosMembresias + ingresosVentas,
+      porCaducar,
+      vencidas,
+      entradasHoy: asistenciasHoy.length,
+      sociosDistintosHoy,
+      totalVentasHoy,
       productosBajoStock,
-      productosActivos,
-      ultimosMiembros,
-      ultimasAsistencias,
-      ultimosPagos,
-      ultimasVentas,
     }
-  }, [miembros, membresias, pagos, asistencias, ventas, productos])
+  }, [miembros, membresias, asistenciasHoy, ventasHoy, productos])
 
   return (
-    <div>
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-2 text-gray-600">
-            {esDueno
-              ? 'Resumen general administrativo de MAK FITNESS.'
-              : 'Panel operativo para recepción y atención diaria.'}
+    <div className="w-full max-w-full overflow-x-hidden">
+      <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <h1 className="break-words text-2xl font-bold leading-tight text-gray-900 md:text-3xl">
+            Dashboard
+          </h1>
+
+          <p className="mt-2 max-w-full break-words text-sm leading-relaxed text-gray-600 md:text-base">
+            Panel operativo para recepción y administración del gimnasio.
           </p>
         </div>
 
         <button
           onClick={cargarDashboard}
           disabled={cargando}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
           <RefreshCw size={18} />
           {cargando ? 'Actualizando...' : 'Actualizar'}
@@ -391,17 +356,18 @@ export default function DashboardPage() {
       )}
 
       {esEmpleado && (
-        <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+        <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-900 md:p-5">
           <div className="flex gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100">
               <ShieldCheck size={22} className="text-blue-700" />
             </div>
 
-            <div>
-              <h2 className="font-bold text-blue-900">
+            <div className="min-w-0">
+              <h2 className="break-words text-lg font-bold md:text-xl">
                 Sesión de empleado
               </h2>
-              <p className="mt-1 text-sm text-blue-800">
+
+              <p className="mt-1 break-words text-sm leading-relaxed md:text-base">
                 Tienes acceso operativo para registrar miembros, membresías, asistencias y ventas. Las secciones administrativas y financieras están restringidas.
               </p>
             </div>
@@ -409,474 +375,295 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Miembros activos</p>
-            <Users size={22} className="text-gray-400" />
-          </div>
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <TarjetaResumen
+          titulo="Miembros activos"
+          valor={cargando ? '-' : resumen.miembrosActivos}
+          detalle={`${resumen.miembrosInactivos} no activos`}
+          icono={Users}
+          tono="verde"
+        />
 
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
-            {cargando ? '-' : datos.miembrosActivos.length}
-          </h2>
+        <TarjetaResumen
+          titulo="Membresías activas"
+          valor={cargando ? '-' : resumen.membresiasActivas}
+          detalle="Socios con vigencia regular"
+          icono={CreditCard}
+        />
 
-          <p className="mt-1 text-xs text-gray-500">
-            Inactivos o suspendidos: {cargando ? '-' : datos.miembrosInactivos.length}
-          </p>
-        </div>
+        <TarjetaResumen
+          titulo="Entradas de hoy"
+          valor={cargando ? '-' : resumen.entradasHoy}
+          detalle={`${resumen.sociosDistintosHoy} socios distintos`}
+          icono={CalendarCheck}
+        />
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Entradas hoy</p>
-            <CalendarCheck size={22} className="text-gray-400" />
-          </div>
-
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
-            {cargando ? '-' : asistencias.length}
-          </h2>
-
-          <p className="mt-1 text-xs text-gray-500">
-            Socios distintos: {cargando ? '-' : datos.miembrosConAsistenciaHoy.size}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Membresías vencidas</p>
-            <AlertTriangle size={22} className="text-gray-400" />
-          </div>
-
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
-            {cargando ? '-' : datos.membresiasVencidas.length}
-          </h2>
-
-          <p className="mt-1 text-xs text-gray-500">
-            Próximas a vencer: {cargando ? '-' : datos.proximosVencimientos.length}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Productos bajo stock</p>
-            <Package size={22} className="text-gray-400" />
-          </div>
-
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
-            {cargando ? '-' : datos.productosBajoStock.length}
-          </h2>
-
-          <p className="mt-1 text-xs text-gray-500">
-            Productos activos: {cargando ? '-' : datos.productosActivos.length}
-          </p>
-        </div>
+        <TarjetaResumen
+          titulo="Ventas de hoy"
+          valor={cargando ? '-' : formatearDinero(resumen.totalVentasHoy)}
+          detalle="Ingresos por inventario"
+          icono={ShoppingCart}
+          tono="verde"
+        />
       </div>
 
-      {esDueno && (
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Ingresos del mes</p>
-              <TrendingUp size={22} className="text-gray-400" />
-            </div>
-
-            <h2 className="mt-2 text-3xl font-bold text-gray-900">
-              {cargando ? '-' : formatearDinero(datos.ingresosTotales)}
-            </h2>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Membresías + ventas
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Ingresos membresías</p>
-              <CreditCard size={22} className="text-gray-400" />
-            </div>
-
-            <h2 className="mt-2 text-3xl font-bold text-gray-900">
-              {cargando ? '-' : formatearDinero(datos.ingresosMembresias)}
-            </h2>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Pagos registrados: {cargando ? '-' : pagos.length}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Ingresos ventas</p>
-              <ShoppingCart size={22} className="text-gray-400" />
-            </div>
-
-            <h2 className="mt-2 text-3xl font-bold text-gray-900">
-              {cargando ? '-' : formatearDinero(datos.ingresosVentas)}
-            </h2>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Ventas registradas: {cargando ? '-' : ventas.length}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {esEmpleado && (
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900">Acciones rápidas</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Accesos frecuentes para operación diaria.
-          </p>
-
-          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <Link
-              href="/miembros"
-              className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:bg-gray-100"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white">
-                <Plus size={20} className="text-gray-600" />
+      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="min-w-0 rounded-2xl border border-gray-200 bg-white shadow-sm xl:col-span-2">
+          <div className="border-b border-gray-200 p-4 md:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="break-words text-lg font-bold text-gray-900">
+                  Membresías por caducar
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Socios que debes avisar al ingresar.
+                </p>
               </div>
-              <div>
-                <p className="font-semibold text-gray-900">Nuevo miembro</p>
-                <p className="text-xs text-gray-500">Registrar socio</p>
-              </div>
-            </Link>
 
-            <Link
-              href="/membresias"
-              className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:bg-gray-100"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white">
-                <CreditCard size={20} className="text-gray-600" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Membresía</p>
-                <p className="text-xs text-gray-500">Asignar plan</p>
-              </div>
-            </Link>
-
-            <Link
-              href="/asistencia"
-              className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:bg-gray-100"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white">
-                <ClipboardCheck size={20} className="text-gray-600" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Asistencia</p>
-                <p className="text-xs text-gray-500">Validar entrada</p>
-              </div>
-            </Link>
-
-            <Link
-              href="/inventario"
-              className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:bg-gray-100"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white">
-                <ShoppingCart size={20} className="text-gray-600" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">Venta</p>
-                <p className="text-xs text-gray-500">Registrar producto</p>
-              </div>
-            </Link>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm xl:col-span-2">
-          <div className="border-b border-gray-200 p-5">
-            <h2 className="text-lg font-bold text-gray-900">Estado de membresías</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Resumen operativo actual.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
-            <div className="rounded-2xl bg-green-50 p-5">
-              <p className="text-sm font-medium text-green-700">Activas</p>
-              <h3 className="mt-2 text-3xl font-bold text-green-800">
-                {cargando ? '-' : datos.membresiasActivas.length}
-              </h3>
-            </div>
-
-            <div className="rounded-2xl bg-red-50 p-5">
-              <p className="text-sm font-medium text-red-700">Vencidas</p>
-              <h3 className="mt-2 text-3xl font-bold text-red-800">
-                {cargando ? '-' : datos.membresiasVencidas.length}
-              </h3>
-            </div>
-
-            <div className="rounded-2xl bg-yellow-50 p-5">
-              <p className="text-sm font-medium text-yellow-700">Suspendidas</p>
-              <h3 className="mt-2 text-3xl font-bold text-yellow-800">
-                {cargando ? '-' : datos.membresiasSuspendidas.length}
-              </h3>
+              <span className="shrink-0 rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
+                {resumen.porCaducar.length}
+              </span>
             </div>
           </div>
+
+          {cargando ? (
+            <div className="p-6 text-center text-sm text-gray-500">
+              Cargando información...
+            </div>
+          ) : resumen.porCaducar.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-500">
+              No hay membresías próximas a vencer.
+            </div>
+          ) : (
+            <div className="max-h-[360px] overflow-y-auto">
+              <div className="divide-y divide-gray-100">
+                {resumen.porCaducar.slice(0, 10).map((membresia) => {
+                  const miembro = membresia.miembros || {}
+                  const estado = membresia.estado_calculado
+
+                  return (
+                    <div key={membresia.id} className="p-4 md:p-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="break-words font-bold text-gray-900">
+                            {miembro.nombre} {miembro.apellido}
+                          </p>
+
+                          <p className="mt-1 text-sm text-gray-500">
+                            Código: {miembro.codigo_acceso || '-'} · {miembro.telefono || 'Sin teléfono'}
+                          </p>
+
+                          <p className="mt-1 text-xs text-gray-500">
+                            Vence: {formatearFecha(membresia.fecha_fin)}
+                          </p>
+                        </div>
+
+                        <span className={`w-fit shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${estado.clase}`}>
+                          {estado.texto}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 p-5">
-            <div className="flex items-center gap-2">
-              <Clock size={20} className="text-gray-500" />
-              <h2 className="text-lg font-bold text-gray-900">
-                Próximos vencimientos
-              </h2>
+        <div className="min-w-0 rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-200 p-4 md:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="break-words text-lg font-bold text-gray-900">
+                  Alertas rápidas
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Pendientes importantes.
+                </p>
+              </div>
+
+              <AlertTriangle size={22} className="shrink-0 text-orange-500" />
             </div>
-            <p className="mt-1 text-sm text-gray-500">
-              Membresías que vencen en 7 días.
-            </p>
           </div>
 
-          <div className="p-5">
-            {cargando ? (
-              <p className="text-sm text-gray-500">Cargando...</p>
-            ) : datos.proximosVencimientos.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                No hay vencimientos próximos.
+          <div className="space-y-3 p-4 md:p-5">
+            <div className="rounded-2xl bg-red-50 p-4">
+              <p className="text-sm font-semibold text-red-700">
+                Membresías vencidas
               </p>
-            ) : (
-              <div className="space-y-4">
-                {datos.proximosVencimientos.map((membresia) => (
-                  <div
-                    key={membresia.id}
-                    className="rounded-xl border border-gray-200 p-4"
-                  >
-                    <p className="font-semibold text-gray-900">
-                      {membresia.miembros?.nombre} {membresia.miembros?.apellido}
-                    </p>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {membresia.planes?.nombre || 'Sin plan'} · vence {formatearFecha(membresia.fecha_fin)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
+              <p className="mt-1 text-2xl font-bold text-red-700">
+                {cargando ? '-' : resumen.vencidas.length}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-orange-50 p-4">
+              <p className="text-sm font-semibold text-orange-700">
+                Por caducar
+              </p>
+              <p className="mt-1 text-2xl font-bold text-orange-700">
+                {cargando ? '-' : resumen.porCaducar.length}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-gray-50 p-4">
+              <p className="text-sm font-semibold text-gray-700">
+                Bajo stock
+              </p>
+              <p className="mt-1 text-2xl font-bold text-gray-900">
+                {cargando ? '-' : resumen.productosBajoStock.length}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 p-5">
-            <h2 className="text-lg font-bold text-gray-900">Entradas de hoy</h2>
+      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="min-w-0 rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-200 p-4 md:p-5">
+            <h2 className="break-words text-lg font-bold text-gray-900">
+              Últimas entradas de hoy
+            </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Últimas asistencias verificadas.
+              Registros más recientes de asistencia.
             </p>
           </div>
 
-          <div className="p-5">
-            {cargando ? (
-              <p className="text-sm text-gray-500">Cargando...</p>
-            ) : datos.ultimasAsistencias.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                Todavía no hay entradas registradas hoy.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {datos.ultimasAsistencias.map((asistencia) => (
-                  <div
-                    key={asistencia.id}
-                    className="flex items-center gap-4 rounded-xl border border-gray-200 p-4"
-                  >
-                    <div className="h-10 w-10 overflow-hidden rounded-full bg-gray-100">
+          {cargando ? (
+            <div className="p-6 text-center text-sm text-gray-500">
+              Cargando entradas...
+            </div>
+          ) : asistenciasHoy.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-500">
+              No hay entradas registradas hoy.
+            </div>
+          ) : (
+            <div className="max-h-[360px] overflow-y-auto">
+              <div className="divide-y divide-gray-100">
+                {asistenciasHoy.slice(0, 10).map((asistencia) => (
+                  <div key={asistencia.id} className="flex items-center gap-3 p-4 md:p-5">
+                    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-gray-100">
                       {asistencia.miembros?.foto_url ? (
                         <img
                           src={asistencia.miembros.foto_url}
-                          alt="Foto del socio"
+                          alt="Foto socio"
                           className="h-full w-full object-cover"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center">
-                          <UserRound size={18} className="text-gray-400" />
+                          <Users size={18} className="text-gray-400" />
                         </div>
                       )}
                     </div>
 
-                    <div>
-                      <p className="font-semibold text-gray-900">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-gray-900">
                         {asistencia.miembros?.nombre} {asistencia.miembros?.apellido}
                       </p>
-                      <p className="mt-1 text-sm text-gray-500">
-                        {formatearHora(asistencia.fecha_entrada)} · {asistencia.origen_registro || 'manual'}
+                      <p className="text-sm text-gray-500">
+                        Código: {asistencia.miembros?.codigo_acceso || '-'}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-bold text-gray-900">
+                        {formatearHora(asistencia.fecha_entrada)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Entrada
                       </p>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 p-5">
-            <h2 className="text-lg font-bold text-gray-900">Últimos miembros</h2>
+        <div className="min-w-0 rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-200 p-4 md:p-5">
+            <h2 className="break-words text-lg font-bold text-gray-900">
+              Productos con bajo stock
+            </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Socios registrados recientemente.
+              Revisa reposición de inventario.
             </p>
           </div>
 
-          <div className="p-5">
-            {cargando ? (
-              <p className="text-sm text-gray-500">Cargando...</p>
-            ) : datos.ultimosMiembros.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                Todavía no hay miembros registrados.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {datos.ultimosMiembros.map((miembro) => (
-                  <div
-                    key={miembro.id}
-                    className="flex items-center gap-4 rounded-xl border border-gray-200 p-4"
-                  >
-                    <div className="h-10 w-10 overflow-hidden rounded-full bg-gray-100">
-                      {miembro.foto_url ? (
-                        <img
-                          src={miembro.foto_url}
-                          alt="Foto del socio"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                          <UserRound size={18} className="text-gray-400" />
-                        </div>
-                      )}
+          {cargando ? (
+            <div className="p-6 text-center text-sm text-gray-500">
+              Cargando inventario...
+            </div>
+          ) : resumen.productosBajoStock.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-500">
+              No hay productos con bajo stock.
+            </div>
+          ) : (
+            <div className="max-h-[360px] overflow-y-auto">
+              <div className="divide-y divide-gray-100">
+                {resumen.productosBajoStock.slice(0, 10).map((producto) => (
+                  <div key={producto.id} className="flex items-center justify-between gap-3 p-4 md:p-5">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-gray-900">
+                        {producto.nombre}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Precio: {formatearDinero(producto.precio)}
+                      </p>
                     </div>
 
-                    <div>
-                      <p className="font-semibold text-gray-900">
-                        {miembro.nombre} {miembro.apellido}
-                      </p>
-                      <p className="mt-1 text-sm text-gray-500">
-                        {miembro.cedula || 'Sin cédula'} · {miembro.telefono || 'Sin teléfono'}
-                      </p>
-                    </div>
+                    <span className="shrink-0 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                      Stock {producto.stock || 0}
+                    </span>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 p-5">
-          <h2 className="text-lg font-bold text-gray-900">Productos con bajo stock</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Productos activos que necesitan reposición.
-          </p>
-        </div>
+      {!esEmpleado && (
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <h2 className="break-words text-lg font-bold text-gray-900">
+                Resumen administrativo
+              </h2>
+              <p className="mt-1 break-words text-sm text-gray-500">
+                Vista general de operación, membresías, ventas e inventario.
+              </p>
+            </div>
 
-        {datos.productosBajoStock.length === 0 ? (
-          <div className="p-8 text-center text-sm text-gray-500">
-            No hay productos con bajo stock.
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {datos.productosBajoStock.map((producto) => (
-              <div
-                key={producto.id}
-                className="flex flex-col gap-2 p-5 md:flex-row md:items-center md:justify-between"
-              >
-                <div>
-                  <p className="font-bold text-gray-900">
-                    {producto.nombre}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {producto.categoria || 'Sin categoría'} · stock mínimo: {producto.stock_minimo}
-                  </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl bg-gray-50 p-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp size={18} className="text-green-600" />
+                  <p className="text-sm font-semibold text-gray-700">Ventas hoy</p>
                 </div>
-
-                <span className="inline-flex w-fit rounded-full bg-red-50 px-3 py-1 text-sm font-bold text-red-700">
-                  Stock: {producto.stock}
-                </span>
+                <p className="mt-2 text-xl font-bold text-gray-900">
+                  {formatearDinero(resumen.totalVentasHoy)}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {esDueno && (
-        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-200 p-5">
-              <h2 className="text-lg font-bold text-gray-900">Últimos pagos</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Pagos de membresías registrados este mes.
-              </p>
-            </div>
-
-            <div className="p-5">
-              {datos.ultimosPagos.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Todavía no hay pagos registrados este mes.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {datos.ultimosPagos.map((pago) => (
-                    <div
-                      key={pago.id}
-                      className="flex items-center justify-between rounded-xl border border-gray-200 p-4"
-                    >
-                      <div>
-                        <p className="font-semibold text-gray-900">
-                          {pago.miembros?.nombre} {pago.miembros?.apellido}
-                        </p>
-                        <p className="mt-1 text-sm text-gray-500">
-                          {formatearFechaHora(pago.fecha_pago)} · {pago.metodo_pago}
-                        </p>
-                      </div>
-
-                      <p className="text-lg font-bold text-gray-900">
-                        {formatearDinero(pago.monto)}
-                      </p>
-                    </div>
-                  ))}
+              <div className="rounded-xl bg-gray-50 p-4">
+                <div className="flex items-center gap-2">
+                  <Package size={18} className="text-gray-600" />
+                  <p className="text-sm font-semibold text-gray-700">Productos</p>
                 </div>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-200 p-5">
-              <h2 className="text-lg font-bold text-gray-900">Últimas ventas</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Ventas de inventario registradas este mes.
-              </p>
-            </div>
-
-            <div className="p-5">
-              {datos.ultimasVentas.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Todavía no hay ventas registradas este mes.
+                <p className="mt-2 text-xl font-bold text-gray-900">
+                  {productos.length}
                 </p>
-              ) : (
-                <div className="space-y-4">
-                  {datos.ultimasVentas.map((venta) => (
-                    <div
-                      key={venta.id}
-                      className="flex items-center justify-between rounded-xl border border-gray-200 p-4"
-                    >
-                      <div>
-                        <p className="font-semibold text-gray-900">
-                          {venta.miembros
-                            ? `${venta.miembros.nombre} ${venta.miembros.apellido}`
-                            : 'Venta sin miembro asociado'}
-                        </p>
-                        <p className="mt-1 text-sm text-gray-500">
-                          {formatearFechaHora(venta.fecha)} · {venta.metodo_pago}
-                        </p>
-                      </div>
+              </div>
 
-                      <p className="text-lg font-bold text-gray-900">
-                        {formatearDinero(venta.total)}
-                      </p>
-                    </div>
-                  ))}
+              <div className="rounded-xl bg-gray-50 p-4">
+                <div className="flex items-center gap-2">
+                  <CreditCard size={18} className="text-gray-600" />
+                  <p className="text-sm font-semibold text-gray-700">Vencidas</p>
                 </div>
-              )}
+                <p className="mt-2 text-xl font-bold text-red-700">
+                  {resumen.vencidas.length}
+                </p>
+              </div>
             </div>
           </div>
         </div>

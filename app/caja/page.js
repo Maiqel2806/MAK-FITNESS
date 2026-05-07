@@ -101,6 +101,28 @@ function obtenerUsuarioMovimiento(item) {
   return item.created_by_nombre || item.created_by_usuario || 'Sin usuario registrado'
 }
 
+function TarjetaResumen({ titulo, valor, icono: Icon, tono = 'normal' }) {
+  const color =
+    tono === 'verde'
+      ? 'text-green-700'
+      : tono === 'rojo'
+        ? 'text-red-700'
+        : 'text-gray-900'
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-gray-500 md:text-sm">{titulo}</p>
+        <Icon size={22} className="shrink-0 text-gray-400" />
+      </div>
+
+      <h2 className={`mt-2 break-words text-2xl font-bold md:text-3xl ${color}`}>
+        {valor}
+      </h2>
+    </div>
+  )
+}
+
 export default function CajaPage() {
   const [fechaDesde, setFechaDesde] = useState(obtenerInicioMes())
   const [fechaHasta, setFechaHasta] = useState(obtenerFechaHoy())
@@ -143,7 +165,8 @@ export default function CajaPage() {
             id,
             nombre,
             apellido,
-            cedula
+            cedula,
+            codigo_acceso
           )
         `)
         .gte('fecha_pago', inicioISO)
@@ -158,7 +181,8 @@ export default function CajaPage() {
             id,
             nombre,
             apellido,
-            cedula
+            cedula,
+            codigo_acceso
           )
         `)
         .gte('fecha', inicioISO)
@@ -195,9 +219,14 @@ export default function CajaPage() {
       ...gastoInicial,
       fecha: obtenerFechaHoy(),
     })
+
     setMostrarGasto(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function limpiarGasto() {
@@ -205,6 +234,7 @@ export default function CajaPage() {
       ...gastoInicial,
       fecha: obtenerFechaHoy(),
     })
+
     setMostrarGasto(false)
     setError('')
   }
@@ -270,6 +300,7 @@ export default function CajaPage() {
       monto: Number(pago.monto || 0),
       usuario: obtenerUsuarioMovimiento(pago),
       signo: 'ingreso',
+      codigo: pago.miembros?.codigo_acceso || '',
     }))
 
     const movimientosVentas = ventas.map((venta) => ({
@@ -284,6 +315,7 @@ export default function CajaPage() {
       monto: Number(venta.total || 0),
       usuario: obtenerUsuarioMovimiento(venta),
       signo: 'ingreso',
+      codigo: venta.miembros?.codigo_acceso || '',
     }))
 
     const movimientosGastos = gastos.map((gasto) => ({
@@ -296,6 +328,7 @@ export default function CajaPage() {
       monto: Number(gasto.monto || 0),
       usuario: obtenerUsuarioMovimiento(gasto),
       signo: 'egreso',
+      codigo: '',
     }))
 
     return [
@@ -317,6 +350,7 @@ export default function CajaPage() {
         movimiento.concepto,
         movimiento.metodo_pago,
         movimiento.usuario,
+        movimiento.codigo,
       ]
 
       return valores.some((valor) =>
@@ -384,17 +418,19 @@ export default function CajaPage() {
   }
 
   return (
-    <div>
+    <div className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Caja</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
+            Caja
+          </h1>
+          <p className="mt-2 text-sm text-gray-600 md:text-base">
             Controla ingresos, egresos y balance del gimnasio.
           </p>
         </div>
 
         <div className="flex flex-col gap-3 md:flex-row">
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-500">
                 Desde
@@ -451,68 +487,49 @@ export default function CajaPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Ingresos totales</p>
-            <TrendingUp size={22} className="text-gray-400" />
-          </div>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
-            {cargando ? '-' : formatearDinero(resumen.ingresosTotales)}
-          </h2>
-        </div>
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <TarjetaResumen
+          titulo="Ingresos"
+          valor={cargando ? '-' : formatearDinero(resumen.ingresosTotales)}
+          icono={TrendingUp}
+          tono="verde"
+        />
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Membresías</p>
-            <CreditCard size={22} className="text-gray-400" />
-          </div>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
-            {cargando ? '-' : formatearDinero(resumen.ingresosMembresias)}
-          </h2>
-        </div>
+        <TarjetaResumen
+          titulo="Membresías"
+          valor={cargando ? '-' : formatearDinero(resumen.ingresosMembresias)}
+          icono={CreditCard}
+        />
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Ventas</p>
-            <ShoppingCart size={22} className="text-gray-400" />
-          </div>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
-            {cargando ? '-' : formatearDinero(resumen.ingresosVentas)}
-          </h2>
-        </div>
+        <TarjetaResumen
+          titulo="Ventas"
+          valor={cargando ? '-' : formatearDinero(resumen.ingresosVentas)}
+          icono={ShoppingCart}
+        />
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Gastos</p>
-            <TrendingDown size={22} className="text-gray-400" />
-          </div>
-          <h2 className="mt-2 text-3xl font-bold text-red-700">
-            {cargando ? '-' : formatearDinero(resumen.egresos)}
-          </h2>
-        </div>
+        <TarjetaResumen
+          titulo="Gastos"
+          valor={cargando ? '-' : formatearDinero(resumen.egresos)}
+          icono={TrendingDown}
+          tono="rojo"
+        />
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Balance</p>
-            <DollarSign size={22} className="text-gray-400" />
-          </div>
-          <h2
-            className={`mt-2 text-3xl font-bold ${
-              resumen.balance >= 0 ? 'text-green-700' : 'text-red-700'
-            }`}
-          >
-            {cargando ? '-' : formatearDinero(resumen.balance)}
-          </h2>
+        <div className="col-span-2 xl:col-span-1">
+          <TarjetaResumen
+            titulo="Balance"
+            valor={cargando ? '-' : formatearDinero(resumen.balance)}
+            icono={DollarSign}
+            tono={resumen.balance >= 0 ? 'verde' : 'rojo'}
+          />
         </div>
       </div>
 
       {mostrarGasto && (
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Registrar gasto</h2>
-              <p className="text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500">
                 Registra egresos como servicios, mantenimiento, limpieza o compras internas.
               </p>
             </div>
@@ -627,14 +644,55 @@ export default function CajaPage() {
       )}
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 p-5">
+        <div className="border-b border-gray-200 p-4 md:p-5">
           <h2 className="text-lg font-bold text-gray-900">Resumen por método de pago</h2>
           <p className="text-sm text-gray-500">
             Ingresos, gastos y balance separados por efectivo, transferencia y tarjeta.
           </p>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
+          {resumen.porMetodo.map((item) => (
+            <div
+              key={item.metodo}
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-bold capitalize text-gray-900">
+                  {item.metodo}
+                </p>
+
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    item.balance >= 0
+                      ? 'bg-green-50 text-green-700'
+                      : 'bg-red-50 text-red-700'
+                  }`}
+                >
+                  {formatearDinero(item.balance)}
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs font-semibold text-gray-500">Ingresos</p>
+                  <p className="font-bold text-green-700">
+                    {formatearDinero(item.ingresos)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-gray-500">Gastos</p>
+                  <p className="font-bold text-red-700">
+                    {formatearDinero(item.egresos)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[700px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
@@ -675,7 +733,7 @@ export default function CajaPage() {
       </div>
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-gray-200 p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between md:p-5">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Movimientos de caja</h2>
             <p className="text-sm text-gray-500">
@@ -699,7 +757,8 @@ export default function CajaPage() {
 
             <button
               onClick={exportarMovimientos}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
+              disabled={movimientosFiltrados.length === 0}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Download size={18} />
               Exportar
@@ -716,75 +775,145 @@ export default function CajaPage() {
             No hay movimientos en este rango.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                <tr>
-                  <th className="px-5 py-3">Fecha</th>
-                  <th className="px-5 py-3">Tipo</th>
-                  <th className="px-5 py-3">Concepto</th>
-                  <th className="px-5 py-3">Método</th>
-                  <th className="px-5 py-3">Usuario</th>
-                  <th className="px-5 py-3 text-right">Monto</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {movimientosFiltrados.map((movimiento) => (
-                  <tr key={movimiento.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-4 text-gray-700">
-                      {formatearFechaHora(movimiento.fecha)}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
-                          movimiento.signo === 'ingreso'
-                            ? 'bg-green-50 text-green-700'
-                            : 'bg-red-50 text-red-700'
-                        }`}
-                      >
-                        {movimiento.signo === 'ingreso' ? (
-                          <ReceiptText size={13} />
-                        ) : (
-                          <TrendingDown size={13} />
-                        )}
-                        {movimiento.tipo}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <div className="font-semibold text-gray-900">
+          <>
+            <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
+              {movimientosFiltrados.map((movimiento) => (
+                <div
+                  key={movimiento.id}
+                  className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-gray-900">
                         {movimiento.concepto}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {movimiento.categoria}
-                      </div>
-                    </td>
+                      </p>
 
-                    <td className="px-5 py-4 capitalize text-gray-700">
-                      {movimiento.metodo_pago}
-                    </td>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {formatearFechaHora(movimiento.fecha)}
+                      </p>
+                    </div>
 
-                    <td className="px-5 py-4 text-gray-700">
-                      {movimiento.usuario}
-                    </td>
-
-                    <td
-                      className={`px-5 py-4 text-right font-bold ${
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
                         movimiento.signo === 'ingreso'
-                          ? 'text-green-700'
-                          : 'text-red-700'
+                          ? 'bg-green-50 text-green-700'
+                          : 'bg-red-50 text-red-700'
                       }`}
                     >
-                      {movimiento.signo === 'ingreso' ? '+' : '-'}
-                      {formatearDinero(movimiento.monto)}
-                    </td>
+                      {movimiento.tipo}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500">Categoría</p>
+                      <p className="font-semibold text-gray-900">
+                        {movimiento.categoria}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500">Método</p>
+                      <p className="font-semibold capitalize text-gray-900">
+                        {movimiento.metodo_pago}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500">Usuario</p>
+                      <p className="font-semibold text-gray-900">
+                        {movimiento.usuario}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500">Monto</p>
+                      <p
+                        className={`font-bold ${
+                          movimiento.signo === 'ingreso'
+                            ? 'text-green-700'
+                            : 'text-red-700'
+                        }`}
+                      >
+                        {movimiento.signo === 'ingreso' ? '+' : '-'}
+                        {formatearDinero(movimiento.monto)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[1100px] text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-5 py-3">Fecha</th>
+                    <th className="px-5 py-3">Tipo</th>
+                    <th className="px-5 py-3">Concepto</th>
+                    <th className="px-5 py-3">Método</th>
+                    <th className="px-5 py-3">Usuario</th>
+                    <th className="px-5 py-3 text-right">Monto</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+
+                <tbody className="divide-y divide-gray-100">
+                  {movimientosFiltrados.map((movimiento) => (
+                    <tr key={movimiento.id} className="hover:bg-gray-50">
+                      <td className="px-5 py-4 text-gray-700">
+                        {formatearFechaHora(movimiento.fecha)}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+                            movimiento.signo === 'ingreso'
+                              ? 'bg-green-50 text-green-700'
+                              : 'bg-red-50 text-red-700'
+                          }`}
+                        >
+                          {movimiento.signo === 'ingreso' ? (
+                            <ReceiptText size={13} />
+                          ) : (
+                            <TrendingDown size={13} />
+                          )}
+                          {movimiento.tipo}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="font-semibold text-gray-900">
+                          {movimiento.concepto}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {movimiento.categoria}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 capitalize text-gray-700">
+                        {movimiento.metodo_pago}
+                      </td>
+
+                      <td className="px-5 py-4 text-gray-700">
+                        {movimiento.usuario}
+                      </td>
+
+                      <td
+                        className={`px-5 py-4 text-right font-bold ${
+                          movimiento.signo === 'ingreso'
+                            ? 'text-green-700'
+                            : 'text-red-700'
+                        }`}
+                      >
+                        {movimiento.signo === 'ingreso' ? '+' : '-'}
+                        {formatearDinero(movimiento.monto)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

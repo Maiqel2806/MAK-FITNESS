@@ -113,7 +113,7 @@ export default function InventarioPage() {
 
       supabase
         .from('miembros')
-        .select('id, nombre, apellido, cedula, estado')
+        .select('id, nombre, apellido, cedula, codigo_acceso, estado')
         .order('nombre', { ascending: true }),
 
       supabase
@@ -124,7 +124,8 @@ export default function InventarioPage() {
             id,
             nombre,
             apellido,
-            cedula
+            cedula,
+            codigo_acceso
           ),
           ventas_detalle (
             id,
@@ -186,6 +187,10 @@ export default function InventarioPage() {
     setMostrarProducto(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function limpiarProducto() {
@@ -212,6 +217,10 @@ export default function InventarioPage() {
     setMostrarProducto(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   async function guardarProducto(evento) {
@@ -252,7 +261,7 @@ export default function InventarioPage() {
       categoria: formProducto.categoria.trim() || null,
       descripcion: formProducto.descripcion.trim() || null,
       sku: formProducto.sku.trim() || null,
-      precio: Number(formProducto.precio),
+      precio: Number(formProducto.precio || 0),
       costo: Number(formProducto.costo || 0),
       stock: Number(formProducto.stock || 0),
       stock_minimo: Number(formProducto.stock_minimo || 0),
@@ -369,6 +378,10 @@ export default function InventarioPage() {
     setMostrarVenta(true)
     setError('')
     setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
   }
 
   function limpiarVenta() {
@@ -542,15 +555,16 @@ export default function InventarioPage() {
   }, [productos, ventas])
 
   const totalCarrito = carrito.reduce((total, item) => total + Number(item.subtotal || 0), 0)
-
   const campoBloqueadoEmpleado = Boolean(editandoId && esEmpleado)
 
   return (
-    <div>
+    <div className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Inventario y ventas</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
+            Inventario y ventas
+          </h1>
+          <p className="mt-2 text-sm text-gray-600 md:text-base">
             Controla productos, stock, alertas y ventas del gimnasio.
           </p>
         </div>
@@ -586,58 +600,58 @@ export default function InventarioPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Productos</p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Productos</p>
+          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-3xl">
             {cargando ? '-' : resumen.totalProductos}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Activos</p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Activos</p>
+          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-3xl">
             {cargando ? '-' : resumen.productosActivos}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Bajo stock</p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Bajo stock</p>
+          <h2 className="mt-2 text-2xl font-bold text-red-700 md:text-3xl">
             {cargando ? '-' : resumen.bajoStock}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Valor inventario</p>
-          <h2 className="mt-2 text-2xl font-bold text-gray-900">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Valor inventario</p>
+          <h2 className="mt-2 text-xl font-bold text-gray-900 md:text-2xl">
             {cargando ? '-' : formatearDinero(resumen.valorInventario)}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Ventas hoy</p>
-          <h2 className="mt-2 text-3xl font-bold text-gray-900">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Ventas hoy</p>
+          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-3xl">
             {cargando ? '-' : resumen.ventasHoy}
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Total hoy</p>
-          <h2 className="mt-2 text-2xl font-bold text-gray-900">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Total hoy</p>
+          <h2 className="mt-2 text-xl font-bold text-green-700 md:text-2xl">
             {cargando ? '-' : formatearDinero(resumen.totalVentasHoy)}
           </h2>
         </div>
       </div>
 
       {mostrarProducto && (
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-gray-900">
                 {editandoId ? 'Editar producto' : 'Registrar nuevo producto'}
               </h2>
-              <p className="text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500">
                 {campoBloqueadoEmpleado
                   ? 'Como empleado solo puedes editar el nombre del producto.'
                   : 'Define precio, costo, stock y stock mínimo.'}
@@ -804,11 +818,11 @@ export default function InventarioPage() {
       )}
 
       {mostrarVenta && (
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Registrar venta</h2>
-              <p className="text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500">
                 Selecciona productos, cantidades y método de pago.
               </p>
             </div>
@@ -837,7 +851,7 @@ export default function InventarioPage() {
                     .filter((miembro) => miembro.estado === 'activo')
                     .map((miembro) => (
                       <option key={miembro.id} value={miembro.id}>
-                        {miembro.nombre} {miembro.apellido} - {miembro.cedula || 'Sin cédula'}
+                        {miembro.nombre} {miembro.apellido} - Código {miembro.codigo_acceso || '-'}
                       </option>
                     ))}
                 </select>
@@ -918,96 +932,145 @@ export default function InventarioPage() {
                   No hay productos agregados.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[700px] text-left text-sm">
-                    <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                      <tr>
-                        <th className="px-4 py-3">Producto</th>
-                        <th className="px-4 py-3">Cantidad</th>
-                        <th className="px-4 py-3">Precio</th>
-                        <th className="px-4 py-3">Subtotal</th>
-                        <th className="px-4 py-3 text-right">Acción</th>
-                      </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-gray-100">
-                      {carrito.map((item) => (
-                        <tr key={item.producto_id}>
-                          <td className="px-4 py-3">
-                            <div className="font-semibold text-gray-900">
-                              {item.nombre}
-                            </div>
-                            <div className="text-xs text-gray-500">
+                <>
+                  <div className="grid grid-cols-1 gap-3 p-4 md:hidden">
+                    {carrito.map((item) => (
+                      <div
+                        key={item.producto_id}
+                        className="rounded-2xl border border-gray-200 bg-white p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-gray-900">{item.nombre}</p>
+                            <p className="mt-1 text-xs text-gray-500">
                               {item.categoria || 'Sin categoría'}
-                            </div>
-                          </td>
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3 text-gray-700">
-                            {item.cantidad}
-                          </td>
+                          <button
+                            type="button"
+                            onClick={() => quitarProductoCarrito(item.producto_id)}
+                            className="rounded-lg p-2 text-red-500 transition hover:bg-red-50"
+                          >
+                            <Minus size={16} />
+                          </button>
+                        </div>
 
-                          <td className="px-4 py-3 text-gray-700">
-                            {formatearDinero(item.precio_unitario)}
-                          </td>
+                        <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                          <div>
+                            <p className="text-xs font-semibold text-gray-500">Cant.</p>
+                            <p className="font-bold text-gray-900">{item.cantidad}</p>
+                          </div>
 
-                          <td className="px-4 py-3 font-semibold text-gray-900">
-                            {formatearDinero(item.subtotal)}
-                          </td>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-500">Precio</p>
+                            <p className="font-bold text-gray-900">
+                              {formatearDinero(item.precio_unitario)}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => quitarProductoCarrito(item.producto_id)}
-                              className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
-                            >
-                              <Minus size={17} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  <div className="flex justify-end border-t border-gray-200 p-4">
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500">Total</p>
-                      <p className="text-3xl font-bold text-gray-900">
-                        {formatearDinero(totalCarrito)}
-                      </p>
-                    </div>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-500">Subtotal</p>
+                            <p className="font-bold text-gray-900">
+                              {formatearDinero(item.subtotal)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
+
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="w-full min-w-[700px] text-left text-sm">
+                      <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="px-4 py-3">Producto</th>
+                          <th className="px-4 py-3">Cantidad</th>
+                          <th className="px-4 py-3">Precio</th>
+                          <th className="px-4 py-3">Subtotal</th>
+                          <th className="px-4 py-3 text-right">Acción</th>
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-gray-100">
+                        {carrito.map((item) => (
+                          <tr key={item.producto_id}>
+                            <td className="px-4 py-3">
+                              <div className="font-semibold text-gray-900">
+                                {item.nombre}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {item.categoria || 'Sin categoría'}
+                              </div>
+                            </td>
+
+                            <td className="px-4 py-3 text-gray-700">
+                              {item.cantidad}
+                            </td>
+
+                            <td className="px-4 py-3 text-gray-700">
+                              {formatearDinero(item.precio_unitario)}
+                            </td>
+
+                            <td className="px-4 py-3 font-semibold text-gray-900">
+                              {formatearDinero(item.subtotal)}
+                            </td>
+
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => quitarProductoCarrito(item.producto_id)}
+                                className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
+                              >
+                                <Minus size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
 
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="submit"
-                disabled={registrandoVenta || carrito.length === 0}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Receipt size={18} />
-                {registrandoVenta ? 'Registrando...' : 'Guardar venta'}
-              </button>
+            <div className="mt-5 flex flex-col gap-4 rounded-2xl bg-gray-50 p-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Total de venta</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {formatearDinero(totalCarrito)}
+                </p>
+              </div>
 
-              <button
-                type="button"
-                onClick={limpiarVenta}
-                className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="submit"
+                  disabled={registrandoVenta || carrito.length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Receipt size={18} />
+                  {registrandoVenta ? 'Registrando...' : 'Confirmar venta'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={limpiarVenta}
+                  className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-semibold text-gray-700 transition hover:bg-white"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           </form>
         </div>
       )}
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-gray-200 p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between md:p-5">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Productos</h2>
             <p className="text-sm text-gray-500">
-              Inventario actual del gimnasio.
+              Total registrados: {productos.length}
             </p>
           </div>
 
@@ -1020,14 +1083,14 @@ export default function InventarioPage() {
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-4 text-sm outline-none focus:border-black"
-              placeholder="Buscar por producto, categoría o SKU"
+              placeholder="Buscar producto, categoría o SKU"
             />
           </div>
         </div>
 
         {cargando ? (
           <div className="p-8 text-center text-sm text-gray-500">
-            Cargando productos...
+            Cargando inventario...
           </div>
         ) : productosFiltrados.length === 0 ? (
           <div className="p-8 text-center">
@@ -1036,186 +1099,286 @@ export default function InventarioPage() {
             </div>
             <p className="font-semibold text-gray-900">No hay productos registrados</p>
             <p className="mt-1 text-sm text-gray-500">
-              Crea tu primer producto para empezar.
+              Agrega productos para empezar a vender.
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                <tr>
-                  <th className="px-5 py-3">Producto</th>
-                  <th className="px-5 py-3">Categoría</th>
-                  <th className="px-5 py-3">Precio</th>
-                  <th className="px-5 py-3">Costo</th>
-                  <th className="px-5 py-3">Stock</th>
-                  <th className="px-5 py-3">Estado</th>
-                  <th className="px-5 py-3 text-right">Acciones</th>
-                </tr>
-              </thead>
+          <>
+            <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
+              {productosFiltrados.map((producto) => {
+                const bajoStock = Number(producto.stock || 0) <= Number(producto.stock_minimo || 0)
 
-              <tbody className="divide-y divide-gray-100">
-                {productosFiltrados.map((producto) => {
-                  const bajoStock = Number(producto.stock || 0) <= Number(producto.stock_minimo || 0)
+                return (
+                  <div
+                    key={producto.id}
+                    className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold text-gray-900">{producto.nombre}</h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                          {producto.categoria || 'Sin categoría'}
+                        </p>
+                        {producto.sku && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            SKU: {producto.sku}
+                          </p>
+                        )}
+                      </div>
 
-                  return (
-                    <tr key={producto.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-4">
-                        <div className="font-semibold text-gray-900">
-                          {producto.nombre}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {producto.sku || 'Sin SKU'} · {producto.descripcion || 'Sin descripción'}
-                        </div>
-                      </td>
+                      <span
+                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                          producto.activo
+                            ? 'bg-green-50 text-green-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {producto.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
 
-                      <td className="px-5 py-4 text-gray-700">
-                        {producto.categoria || '-'}
-                      </td>
+                    <div className="mt-4 grid grid-cols-3 gap-3 rounded-2xl bg-gray-50 p-4 text-sm">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500">Precio</p>
+                        <p className="font-bold text-gray-900">
+                          {formatearDinero(producto.precio)}
+                        </p>
+                      </div>
 
-                      <td className="px-5 py-4 font-semibold text-gray-900">
-                        {formatearDinero(producto.precio)}
-                      </td>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500">Stock</p>
+                        <p className={`font-bold ${bajoStock ? 'text-red-700' : 'text-gray-900'}`}>
+                          {producto.stock || 0}
+                        </p>
+                      </div>
 
-                      <td className="px-5 py-4 text-gray-700">
-                        {formatearDinero(producto.costo)}
-                      </td>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500">Mínimo</p>
+                        <p className="font-bold text-gray-900">
+                          {producto.stock_minimo || 0}
+                        </p>
+                      </div>
+                    </div>
 
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900">
-                            {producto.stock}
-                          </span>
+                    {bajoStock && (
+                      <div className="mt-3 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                        <AlertTriangle size={16} />
+                        Bajo stock
+                      </div>
+                    )}
 
-                          {bajoStock && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">
-                              <AlertTriangle size={13} />
-                              Bajo
-                            </span>
-                          )}
-                        </div>
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        onClick={() => editarProducto(producto)}
+                        className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+                        title="Editar"
+                      >
+                        <Pencil size={17} />
+                      </button>
 
-                        <div className="text-xs text-gray-500">
-                          Mínimo: {producto.stock_minimo}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                            producto.activo
-                              ? 'bg-green-50 text-green-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
-                        >
-                          {producto.activo ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex justify-end gap-2">
-                          {esDueno && (
-                            <button
-                              onClick={() => cambiarEstadoProducto(producto)}
-                              className={`rounded-lg p-2 transition ${
-                                producto.activo
-                                  ? 'text-green-600 hover:bg-green-50'
-                                  : 'text-gray-500 hover:bg-gray-100'
-                              }`}
-                              title={producto.activo ? 'Desactivar' : 'Activar'}
-                            >
-                              {producto.activo ? (
-                                <ToggleRight size={18} />
-                              ) : (
-                                <ToggleLeft size={18} />
-                              )}
-                            </button>
-                          )}
-
+                      {esDueno && (
+                        <>
                           <button
-                            onClick={() => editarProducto(producto)}
-                            className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-                            title="Editar"
+                            onClick={() => cambiarEstadoProducto(producto)}
+                            className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+                            title={producto.activo ? 'Desactivar' : 'Activar'}
                           >
-                            <Pencil size={17} />
+                            {producto.activo ? (
+                              <ToggleRight size={18} />
+                            ) : (
+                              <ToggleLeft size={18} />
+                            )}
                           </button>
 
-                          {esDueno && (
+                          <button
+                            onClick={() => eliminarProducto(producto)}
+                            className="rounded-lg border border-red-100 p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
+                            title="Eliminar"
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[1100px] text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-5 py-3">Producto</th>
+                    <th className="px-5 py-3">SKU</th>
+                    <th className="px-5 py-3">Precio</th>
+                    <th className="px-5 py-3">Costo</th>
+                    <th className="px-5 py-3">Stock</th>
+                    <th className="px-5 py-3">Mínimo</th>
+                    <th className="px-5 py-3">Estado</th>
+                    <th className="px-5 py-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-100">
+                  {productosFiltrados.map((producto) => {
+                    const bajoStock = Number(producto.stock || 0) <= Number(producto.stock_minimo || 0)
+
+                    return (
+                      <tr key={producto.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-4">
+                          <div className="font-semibold text-gray-900">
+                            {producto.nombre}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {producto.categoria || 'Sin categoría'}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4 text-gray-700">
+                          {producto.sku || '-'}
+                        </td>
+
+                        <td className="px-5 py-4 font-semibold text-gray-900">
+                          {formatearDinero(producto.precio)}
+                        </td>
+
+                        <td className="px-5 py-4 text-gray-700">
+                          {formatearDinero(producto.costo)}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+                              bajoStock
+                                ? 'bg-red-50 text-red-700'
+                                : 'bg-green-50 text-green-700'
+                            }`}
+                          >
+                            {bajoStock && <AlertTriangle size={13} />}
+                            {producto.stock || 0}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4 text-gray-700">
+                          {producto.stock_minimo || 0}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                              producto.activo
+                                ? 'bg-green-50 text-green-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {producto.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-2">
                             <button
-                              onClick={() => eliminarProducto(producto)}
-                              className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
-                              title="Eliminar"
+                              onClick={() => editarProducto(producto)}
+                              className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+                              title="Editar"
                             >
-                              <Trash2 size={17} />
+                              <Pencil size={17} />
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+
+                            {esDueno && (
+                              <>
+                                <button
+                                  onClick={() => cambiarEstadoProducto(producto)}
+                                  className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+                                  title={producto.activo ? 'Desactivar' : 'Activar'}
+                                >
+                                  {producto.activo ? (
+                                    <ToggleRight size={18} />
+                                  ) : (
+                                    <ToggleLeft size={18} />
+                                  )}
+                                </button>
+
+                                <button
+                                  onClick={() => eliminarProducto(producto)}
+                                  className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 size={17} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 p-5">
+        <div className="border-b border-gray-200 p-4 md:p-5">
           <h2 className="text-lg font-bold text-gray-900">Últimas ventas</h2>
           <p className="text-sm text-gray-500">
-            Historial reciente de ventas registradas.
+            Ventas recientes registradas en el sistema.
           </p>
         </div>
 
         {ventas.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">
-            Todavía no hay ventas registradas.
+            No hay ventas registradas.
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {ventas.map((venta) => (
-              <div key={venta.id} className="p-5">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="max-h-[420px] overflow-y-auto">
+            <div className="divide-y divide-gray-100">
+              {ventas.map((venta) => (
+                <div
+                  key={venta.id}
+                  className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between md:p-5"
+                >
                   <div>
                     <p className="font-bold text-gray-900">
                       {venta.miembros
                         ? `${venta.miembros.nombre} ${venta.miembros.apellido}`
                         : 'Venta sin miembro asociado'}
                     </p>
+
                     <p className="mt-1 text-sm text-gray-500">
-                      {formatearFechaHora(venta.fecha)} · {venta.metodo_pago}
+                      {venta.miembros?.codigo_acceso
+                        ? `Código: ${venta.miembros.codigo_acceso}`
+                        : 'Sin código asociado'}
                     </p>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      {formatearFechaHora(venta.fecha)}
+                    </p>
+
+                    {venta.ventas_detalle?.length > 0 && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        {venta.ventas_detalle
+                          .map((item) => `${item.productos?.nombre || 'Producto'} x${item.cantidad}`)
+                          .join(', ')}
+                      </p>
+                    )}
                   </div>
 
-                  <p className="text-2xl font-bold text-gray-900">
-                    {formatearDinero(venta.total)}
-                  </p>
-                </div>
+                  <div className="text-left md:text-right">
+                    <p className="text-xl font-bold text-gray-900">
+                      {formatearDinero(venta.total)}
+                    </p>
 
-                <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-                  {(venta.ventas_detalle || []).map((detalle) => (
-                    <div
-                      key={detalle.id}
-                      className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm"
-                    >
-                      <p className="font-semibold text-gray-900">
-                        {detalle.productos?.nombre || 'Producto'}
-                      </p>
-                      <p className="mt-1 text-gray-500">
-                        Cantidad: {detalle.cantidad} · Precio: {formatearDinero(detalle.precio_unitario)}
-                      </p>
-                    </div>
-                  ))}
+                    <p className="text-sm capitalize text-gray-500">
+                      {venta.metodo_pago || '-'}
+                    </p>
+                  </div>
                 </div>
-
-                {venta.notas && (
-                  <p className="mt-3 text-sm text-gray-500">
-                    Nota: {venta.notas}
-                  </p>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>
