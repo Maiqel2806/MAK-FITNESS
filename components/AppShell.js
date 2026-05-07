@@ -56,8 +56,11 @@ export default function AppShell({ children }) {
       return data
     }
 
-    async function verificarSesion() {
-      setCargando(true)
+    async function verificarSesion({ mostrarCarga = false } = {}) {
+      if (mostrarCarga) {
+        setCargando(true)
+      }
+
       setError('')
 
       const { data } = await supabase.auth.getSession()
@@ -65,20 +68,24 @@ export default function AppShell({ children }) {
 
       if (!activo) return
 
-      setSesion(sesionActual)
-
       if (!sesionActual) {
+        setSesion(null)
         setPerfil(null)
 
         if (!esRutaPublica) {
           router.replace('/login')
         }
 
-        setCargando(false)
+        if (mostrarCarga) {
+          setCargando(false)
+        }
+
         return
       }
 
       const perfilActual = await cargarPerfil(sesionActual.user.id)
+
+      if (!activo) return
 
       if (!perfilActual) {
         await supabase.auth.signOut()
@@ -86,33 +93,59 @@ export default function AppShell({ children }) {
         setPerfil(null)
         setError('Tu usuario no está activo o no tiene permisos configurados.')
         router.replace('/login')
-        setCargando(false)
+
+        if (mostrarCarga) {
+          setCargando(false)
+        }
+
         return
       }
 
+      setSesion(sesionActual)
       setPerfil(perfilActual)
 
       if (pathname === '/login') {
         router.replace('/dashboard')
-        setCargando(false)
+
+        if (mostrarCarga) {
+          setCargando(false)
+        }
+
         return
       }
 
       if (!rutaPermitida(pathname, perfilActual)) {
         router.replace('/dashboard')
-        setCargando(false)
+
+        if (mostrarCarga) {
+          setCargando(false)
+        }
+
         return
       }
 
-      setCargando(false)
+      if (mostrarCarga) {
+        setCargando(false)
+      }
     }
 
-    verificarSesion()
+    verificarSesion({ mostrarCarga: true })
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      verificarSesion()
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setSesion(null)
+        setPerfil(null)
+
+        if (!esRutaPublica) {
+          router.replace('/login')
+        }
+
+        return
+      }
+
+      verificarSesion({ mostrarCarga: false })
     })
 
     return () => {
