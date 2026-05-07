@@ -21,6 +21,14 @@ import {
 
 const supabase = createClient()
 
+const tiposTarjeta = [
+  { value: 'visa', label: 'Visa' },
+  { value: 'mastercard', label: 'Mastercard' },
+  { value: 'diners', label: 'Diners' },
+  { value: 'discover', label: 'Discover' },
+  { value: 'american_express', label: 'American Express' },
+]
+
 const productoInicial = {
   nombre: '',
   categoria: '',
@@ -37,6 +45,9 @@ const ventaInicial = {
   miembro_id: '',
   metodo_pago: 'efectivo',
   notas: '',
+  numero_comprobante: '',
+  banco_origen: '',
+  tipo_tarjeta: '',
 }
 
 function formatearDinero(valor) {
@@ -63,6 +74,24 @@ function obtenerFechaHoy() {
   const month = String(hoy.getMonth() + 1).padStart(2, '0')
   const day = String(hoy.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function obtenerEtiquetaTarjeta(tipo) {
+  return tiposTarjeta.find((item) => item.value === tipo)?.label || '-'
+}
+
+function obtenerDetallePago(item) {
+  if (!item) return '-'
+
+  if (item.metodo_pago === 'transferencia') {
+    return `Comprobante: ${item.numero_comprobante || '-'} · Banco: ${item.banco_origen || '-'}`
+  }
+
+  if (item.metodo_pago === 'tarjeta') {
+    return `Comprobante: ${item.numero_comprobante || '-'} · Tarjeta: ${obtenerEtiquetaTarjeta(item.tipo_tarjeta)}`
+  }
+
+  return 'Pago en efectivo'
 }
 
 export default function InventarioPage() {
@@ -175,10 +204,30 @@ export default function InventarioPage() {
   }
 
   function actualizarVenta(campo, valor) {
-    setFormVenta((actual) => ({
-      ...actual,
-      [campo]: valor,
-    }))
+    setFormVenta((actual) => {
+      const nuevo = {
+        ...actual,
+        [campo]: valor,
+      }
+
+      if (campo === 'metodo_pago') {
+        if (valor === 'efectivo') {
+          nuevo.numero_comprobante = ''
+          nuevo.banco_origen = ''
+          nuevo.tipo_tarjeta = ''
+        }
+
+        if (valor === 'transferencia') {
+          nuevo.tipo_tarjeta = ''
+        }
+
+        if (valor === 'tarjeta') {
+          nuevo.banco_origen = ''
+        }
+      }
+
+      return nuevo
+    })
   }
 
   function abrirNuevoProducto() {
@@ -477,6 +526,34 @@ export default function InventarioPage() {
       return
     }
 
+    if (formVenta.metodo_pago === 'transferencia') {
+      if (!formVenta.numero_comprobante.trim()) {
+        setError('Para transferencia debes ingresar el número de comprobante.')
+        setRegistrandoVenta(false)
+        return
+      }
+
+      if (!formVenta.banco_origen.trim()) {
+        setError('Para transferencia debes ingresar el banco de origen.')
+        setRegistrandoVenta(false)
+        return
+      }
+    }
+
+    if (formVenta.metodo_pago === 'tarjeta') {
+      if (!formVenta.numero_comprobante.trim()) {
+        setError('Para pago con tarjeta debes ingresar el número de comprobante.')
+        setRegistrandoVenta(false)
+        return
+      }
+
+      if (!formVenta.tipo_tarjeta) {
+        setError('Para pago con tarjeta debes seleccionar el tipo de tarjeta.')
+        setRegistrandoVenta(false)
+        return
+      }
+    }
+
     const items = carrito.map((item) => ({
       producto_id: item.producto_id,
       cantidad: Number(item.cantidad),
@@ -488,6 +565,9 @@ export default function InventarioPage() {
       p_metodo_pago: formVenta.metodo_pago,
       p_notas: formVenta.notas || null,
       p_items: items,
+      p_numero_comprobante: formVenta.numero_comprobante || null,
+      p_banco_origen: formVenta.banco_origen || null,
+      p_tipo_tarjeta: formVenta.tipo_tarjeta || null,
     })
 
     if (error) {
@@ -823,7 +903,7 @@ export default function InventarioPage() {
             <div>
               <h2 className="text-xl font-bold text-gray-900">Registrar venta</h2>
               <p className="mt-1 text-sm text-gray-500">
-                Selecciona productos, cantidades y método de pago.
+                Selecciona productos, cantidades, método de pago y respaldo si aplica.
               </p>
             </div>
 
@@ -883,6 +963,68 @@ export default function InventarioPage() {
                   placeholder="Opcional"
                 />
               </div>
+
+              {formVenta.metodo_pago === 'transferencia' && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Número de comprobante / voucher
+                    </label>
+                    <input
+                      value={formVenta.numero_comprobante}
+                      onChange={(e) => actualizarVenta('numero_comprobante', e.target.value)}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      placeholder="Ej: TRX-001234"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Banco de origen
+                    </label>
+                    <input
+                      value={formVenta.banco_origen}
+                      onChange={(e) => actualizarVenta('banco_origen', e.target.value)}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      placeholder="Ej: Banco Pichincha"
+                    />
+                  </div>
+                </>
+              )}
+
+              {formVenta.metodo_pago === 'tarjeta' && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Tipo de tarjeta
+                    </label>
+                    <select
+                      value={formVenta.tipo_tarjeta}
+                      onChange={(e) => actualizarVenta('tipo_tarjeta', e.target.value)}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                    >
+                      <option value="">Seleccionar tarjeta</option>
+                      {tiposTarjeta.map((tarjeta) => (
+                        <option key={tarjeta.value} value={tarjeta.value}>
+                          {tarjeta.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Número de comprobante / voucher
+                    </label>
+                    <input
+                      value={formVenta.numero_comprobante}
+                      onChange={(e) => actualizarVenta('numero_comprobante', e.target.value)}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      placeholder="Ej: POS-001234"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -1039,6 +1181,13 @@ export default function InventarioPage() {
                 <p className="text-sm text-gray-500">Total de venta</p>
                 <p className="text-3xl font-bold text-gray-900">
                   {formatearDinero(totalCarrito)}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {formVenta.metodo_pago === 'efectivo'
+                    ? 'Pago en efectivo'
+                    : formVenta.metodo_pago === 'transferencia'
+                      ? 'Pago por transferencia con respaldo obligatorio'
+                      : 'Pago con tarjeta con respaldo obligatorio'}
                 </p>
               </div>
 
@@ -1365,6 +1514,10 @@ export default function InventarioPage() {
                           .join(', ')}
                       </p>
                     )}
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      {obtenerDetallePago(venta)}
+                    </p>
                   </div>
 
                   <div className="text-left md:text-right">

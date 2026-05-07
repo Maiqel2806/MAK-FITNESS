@@ -19,6 +19,14 @@ import {
 
 const supabase = createClient()
 
+const tiposTarjeta = [
+  { value: 'visa', label: 'Visa' },
+  { value: 'mastercard', label: 'Mastercard' },
+  { value: 'diners', label: 'Diners' },
+  { value: 'discover', label: 'Discover' },
+  { value: 'american_express', label: 'American Express' },
+]
+
 const gastoInicial = {
   concepto: '',
   categoria: '',
@@ -99,6 +107,28 @@ function descargarCSV(nombreArchivo, filas) {
 
 function obtenerUsuarioMovimiento(item) {
   return item.created_by_nombre || item.created_by_usuario || 'Sin usuario registrado'
+}
+
+function obtenerEtiquetaTarjeta(tipo) {
+  return tiposTarjeta.find((item) => item.value === tipo)?.label || ''
+}
+
+function obtenerDetallePago(item) {
+  if (!item) return ''
+
+  if (item.metodo_pago === 'transferencia') {
+    return `Comprobante: ${item.numero_comprobante || '-'} · Banco: ${item.banco_origen || '-'}`
+  }
+
+  if (item.metodo_pago === 'tarjeta') {
+    return `Comprobante: ${item.numero_comprobante || '-'} · Tarjeta: ${obtenerEtiquetaTarjeta(item.tipo_tarjeta) || '-'}`
+  }
+
+  if (item.metodo_pago === 'efectivo') {
+    return 'Pago en efectivo'
+  }
+
+  return ''
 }
 
 function TarjetaResumen({ titulo, valor, icono: Icon, tono = 'normal' }) {
@@ -301,6 +331,10 @@ export default function CajaPage() {
       usuario: obtenerUsuarioMovimiento(pago),
       signo: 'ingreso',
       codigo: pago.miembros?.codigo_acceso || '',
+      numero_comprobante: pago.numero_comprobante || '',
+      banco_origen: pago.banco_origen || '',
+      tipo_tarjeta: pago.tipo_tarjeta || '',
+      detalle_pago: obtenerDetallePago(pago),
     }))
 
     const movimientosVentas = ventas.map((venta) => ({
@@ -316,6 +350,10 @@ export default function CajaPage() {
       usuario: obtenerUsuarioMovimiento(venta),
       signo: 'ingreso',
       codigo: venta.miembros?.codigo_acceso || '',
+      numero_comprobante: venta.numero_comprobante || '',
+      banco_origen: venta.banco_origen || '',
+      tipo_tarjeta: venta.tipo_tarjeta || '',
+      detalle_pago: obtenerDetallePago(venta),
     }))
 
     const movimientosGastos = gastos.map((gasto) => ({
@@ -329,6 +367,10 @@ export default function CajaPage() {
       usuario: obtenerUsuarioMovimiento(gasto),
       signo: 'egreso',
       codigo: '',
+      numero_comprobante: '',
+      banco_origen: '',
+      tipo_tarjeta: '',
+      detalle_pago: 'Gasto registrado',
     }))
 
     return [
@@ -351,6 +393,10 @@ export default function CajaPage() {
         movimiento.metodo_pago,
         movimiento.usuario,
         movimiento.codigo,
+        movimiento.numero_comprobante,
+        movimiento.banco_origen,
+        movimiento.tipo_tarjeta,
+        movimiento.detalle_pago,
       ]
 
       return valores.some((valor) =>
@@ -411,6 +457,10 @@ export default function CajaPage() {
         categoria: movimiento.categoria,
         concepto: movimiento.concepto,
         metodo_pago: movimiento.metodo_pago,
+        numero_comprobante: movimiento.numero_comprobante,
+        banco_origen: movimiento.banco_origen,
+        tipo_tarjeta: obtenerEtiquetaTarjeta(movimiento.tipo_tarjeta),
+        detalle_pago: movimiento.detalle_pago,
         monto: movimiento.signo === 'egreso' ? -movimiento.monto : movimiento.monto,
         usuario: movimiento.usuario,
       }))
@@ -425,7 +475,7 @@ export default function CajaPage() {
             Caja
           </h1>
           <p className="mt-2 text-sm text-gray-600 md:text-base">
-            Controla ingresos, egresos y balance del gimnasio.
+            Controla ingresos, egresos, respaldos de pago y balance del gimnasio.
           </p>
         </div>
 
@@ -751,7 +801,7 @@ export default function CajaPage() {
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-4 text-sm outline-none focus:border-black"
-                placeholder="Buscar por concepto, método o usuario"
+                placeholder="Buscar por concepto, comprobante, banco o usuario"
               />
             </div>
 
@@ -840,18 +890,28 @@ export default function CajaPage() {
                       </p>
                     </div>
                   </div>
+
+                  <div className="mt-4 rounded-xl bg-gray-50 p-3">
+                    <p className="text-xs font-semibold text-gray-500">
+                      Detalle de pago
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-gray-800">
+                      {movimiento.detalle_pago || '-'}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
 
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[1100px] text-left text-sm">
+              <table className="w-full min-w-[1250px] text-left text-sm">
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                   <tr>
                     <th className="px-5 py-3">Fecha</th>
                     <th className="px-5 py-3">Tipo</th>
                     <th className="px-5 py-3">Concepto</th>
                     <th className="px-5 py-3">Método</th>
+                    <th className="px-5 py-3">Detalle pago</th>
                     <th className="px-5 py-3">Usuario</th>
                     <th className="px-5 py-3 text-right">Monto</th>
                   </tr>
@@ -892,6 +952,12 @@ export default function CajaPage() {
 
                       <td className="px-5 py-4 capitalize text-gray-700">
                         {movimiento.metodo_pago}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="max-w-[320px] text-xs text-gray-600">
+                          {movimiento.detalle_pago || '-'}
+                        </div>
                       </td>
 
                       <td className="px-5 py-4 text-gray-700">

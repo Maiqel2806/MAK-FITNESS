@@ -19,6 +19,14 @@ import {
 
 const supabase = createClient()
 
+const tiposTarjeta = [
+  { value: 'visa', label: 'Visa' },
+  { value: 'mastercard', label: 'Mastercard' },
+  { value: 'diners', label: 'Diners' },
+  { value: 'discover', label: 'Discover' },
+  { value: 'american_express', label: 'American Express' },
+]
+
 const planInicial = {
   nombre: '',
   descripcion: '',
@@ -35,23 +43,54 @@ const membresiaInicial = {
   monto: '',
   notas: '',
   renovacion_de_membresia_id: null,
+  numero_comprobante: '',
+  banco_origen: '',
+  tipo_tarjeta: '',
+}
+
+const edicionMembresiaInicial = {
+  fecha_inicio: '',
 }
 
 function obtenerFechaHoy() {
-  const hoy = new Date()
-  const year = hoy.getFullYear()
-  const month = String(hoy.getMonth() + 1).padStart(2, '0')
-  const day = String(hoy.getDate()).padStart(2, '0')
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Guayaquil',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+
+  const year = partes.find((parte) => parte.type === 'year')?.value
+  const month = partes.find((parte) => parte.type === 'month')?.value
+  const day = partes.find((parte) => parte.type === 'day')?.value
+
   return `${year}-${month}-${day}`
 }
 
 function sumarDias(fecha, dias) {
   const date = new Date(`${fecha}T00:00:00`)
   date.setDate(date.getDate() + Number(dias || 0))
+
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
+
   return `${year}-${month}-${day}`
+}
+
+function calcularFechaFin(fechaInicio, duracionDias) {
+  if (!fechaInicio || !duracionDias) return ''
+
+  const diasVigentes = Math.max(Number(duracionDias || 1) - 1, 0)
+  return sumarDias(fechaInicio, diasVigentes)
+}
+
+function obtenerDuracionMembresia(membresia) {
+  return Number(
+    membresia?.plan_duracion_dias_snapshot ||
+      membresia?.planes?.duracion_dias ||
+      0
+  )
 }
 
 function diferenciaDias(fechaDesde, fechaHasta) {
@@ -66,10 +105,12 @@ function formatearDinero(valor) {
 
 function formatearFecha(fecha) {
   if (!fecha) return '-'
+
   const texto = String(fecha)
 
   if (texto.includes('T')) {
     const date = new Date(texto)
+
     return date.toLocaleDateString('es-EC', {
       day: '2-digit',
       month: '2-digit',
@@ -85,18 +126,51 @@ function obtenerClaseEstado(estado) {
   if (estado === 'activa') return 'bg-green-50 text-green-700'
   if (estado === 'por_caducar') return 'bg-orange-50 text-orange-700'
   if (estado === 'vence_hoy') return 'bg-yellow-50 text-yellow-700'
+  if (estado === 'futura') return 'bg-blue-50 text-blue-700'
   if (estado === 'vencida') return 'bg-red-50 text-red-700'
   if (estado === 'suspendida') return 'bg-gray-100 text-gray-700'
   return 'bg-gray-100 text-gray-700'
 }
 
 function obtenerEtiquetaEstado(estado) {
-  if (estado === 'activa') return 'Activa'
+  if (estado === 'activa') return 'Vigente'
   if (estado === 'por_caducar') return 'Por caducar'
   if (estado === 'vence_hoy') return 'Vence hoy'
+  if (estado === 'futura') return 'Futura'
   if (estado === 'vencida') return 'Vencida'
   if (estado === 'suspendida') return 'Suspendida'
   return estado
+}
+
+function obtenerEtiquetaTarjeta(tipo) {
+  return tiposTarjeta.find((item) => item.value === tipo)?.label || '-'
+}
+
+function obtenerNombreSocio(membresia) {
+  const miembro = membresia.miembros || {}
+  return `${miembro.nombre || ''} ${miembro.apellido || ''}`.trim() || 'Socio sin nombre'
+}
+
+function obtenerNombrePlan(membresia) {
+  return (
+    membresia.plan_nombre_snapshot ||
+    membresia.planes?.nombre ||
+    'Plan registrado'
+  )
+}
+
+function obtenerDetallePago(pago) {
+  if (!pago) return '-'
+
+  if (pago.metodo_pago === 'transferencia') {
+    return `Comprobante: ${pago.numero_comprobante || '-'} · Banco: ${pago.banco_origen || '-'}`
+  }
+
+  if (pago.metodo_pago === 'tarjeta') {
+    return `Comprobante: ${pago.numero_comprobante || '-'} · Tarjeta: ${obtenerEtiquetaTarjeta(pago.tipo_tarjeta)}`
+  }
+
+  return 'Pago en efectivo'
 }
 
 export default function MembresiasPage() {
@@ -113,16 +187,22 @@ export default function MembresiasPage() {
     ...membresiaInicial,
     fecha_inicio: obtenerFechaHoy(),
   })
+  const [formEditarMembresia, setFormEditarMembresia] = useState(edicionMembresiaInicial)
 
   const [mostrarPlan, setMostrarPlan] = useState(false)
   const [mostrarMembresia, setMostrarMembresia] = useState(false)
+  const [mostrarEditarMembresia, setMostrarEditarMembresia] = useState(false)
+
   const [editandoPlanId, setEditandoPlanId] = useState(null)
+  const [editandoMembresiaId, setEditandoMembresiaId] = useState(null)
+  const [membresiaSeleccionada, setMembresiaSeleccionada] = useState(null)
 
   const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState('todas')
+  const [filtroEstado, setFiltroEstado] = useState('activa')
   const [cargando, setCargando] = useState(true)
   const [guardandoPlan, setGuardandoPlan] = useState(false)
   const [guardandoMembresia, setGuardandoMembresia] = useState(false)
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [error, setError] = useState('')
   const [mensaje, setMensaje] = useState('')
 
@@ -255,8 +335,31 @@ export default function MembresiasPage() {
         }
       }
 
+      if (campo === 'metodo_pago') {
+        if (valor === 'efectivo') {
+          nuevo.numero_comprobante = ''
+          nuevo.banco_origen = ''
+          nuevo.tipo_tarjeta = ''
+        }
+
+        if (valor === 'transferencia') {
+          nuevo.tipo_tarjeta = ''
+        }
+
+        if (valor === 'tarjeta') {
+          nuevo.banco_origen = ''
+        }
+      }
+
       return nuevo
     })
+  }
+
+  function actualizarEdicionMembresia(campo, valor) {
+    setFormEditarMembresia((actual) => ({
+      ...actual,
+      [campo]: valor,
+    }))
   }
 
   function abrirNuevoPlan() {
@@ -268,6 +371,8 @@ export default function MembresiasPage() {
     setFormPlan(planInicial)
     setEditandoPlanId(null)
     setMostrarPlan(true)
+    setMostrarMembresia(false)
+    setMostrarEditarMembresia(false)
     setError('')
     setMensaje('')
 
@@ -292,6 +397,8 @@ export default function MembresiasPage() {
 
     setEditandoPlanId(plan.id)
     setMostrarPlan(true)
+    setMostrarMembresia(false)
+    setMostrarEditarMembresia(false)
     setError('')
     setMensaje('')
 
@@ -314,6 +421,8 @@ export default function MembresiasPage() {
     })
 
     setMostrarMembresia(true)
+    setMostrarPlan(false)
+    setMostrarEditarMembresia(false)
     setError('')
     setMensaje('')
 
@@ -335,9 +444,14 @@ export default function MembresiasPage() {
       monto: plan ? String(plan.precio) : String(membresia.plan_precio_snapshot || ''),
       notas: `Renovación de membresía anterior con vencimiento ${formatearFecha(membresia.fecha_fin)}.`,
       renovacion_de_membresia_id: membresia.id,
+      numero_comprobante: '',
+      banco_origen: '',
+      tipo_tarjeta: '',
     })
 
     setMostrarMembresia(true)
+    setMostrarPlan(false)
+    setMostrarEditarMembresia(false)
     setError('')
     setMensaje('La fecha de inicio fue calculada automáticamente para no perder días de vigencia.')
 
@@ -353,6 +467,38 @@ export default function MembresiasPage() {
     })
 
     setMostrarMembresia(false)
+    setError('')
+  }
+
+  function abrirEditarMembresia(membresia) {
+    if (!esDueno) {
+      setError('No tienes permisos para editar vigencias.')
+      return
+    }
+
+    setMembresiaSeleccionada(membresia)
+    setEditandoMembresiaId(membresia.id)
+
+    setFormEditarMembresia({
+      fecha_inicio: membresia.fecha_inicio || '',
+    })
+
+    setMostrarEditarMembresia(true)
+    setMostrarPlan(false)
+    setMostrarMembresia(false)
+    setError('')
+    setMensaje('')
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 100)
+  }
+
+  function limpiarEdicionMembresia() {
+    setFormEditarMembresia(edicionMembresiaInicial)
+    setEditandoMembresiaId(null)
+    setMembresiaSeleccionada(null)
+    setMostrarEditarMembresia(false)
     setError('')
   }
 
@@ -453,6 +599,34 @@ export default function MembresiasPage() {
       return
     }
 
+    if (formMembresia.metodo_pago === 'transferencia') {
+      if (!formMembresia.numero_comprobante.trim()) {
+        setError('Para transferencia debes ingresar el número de comprobante.')
+        setGuardandoMembresia(false)
+        return
+      }
+
+      if (!formMembresia.banco_origen.trim()) {
+        setError('Para transferencia debes ingresar el banco de origen.')
+        setGuardandoMembresia(false)
+        return
+      }
+    }
+
+    if (formMembresia.metodo_pago === 'tarjeta') {
+      if (!formMembresia.numero_comprobante.trim()) {
+        setError('Para pago con tarjeta debes ingresar el número de comprobante.')
+        setGuardandoMembresia(false)
+        return
+      }
+
+      if (!formMembresia.tipo_tarjeta) {
+        setError('Para pago con tarjeta debes seleccionar el tipo de tarjeta.')
+        setGuardandoMembresia(false)
+        return
+      }
+    }
+
     const { error } = await supabase.rpc('registrar_membresia_inteligente', {
       p_miembro_id: formMembresia.miembro_id,
       p_plan_id: formMembresia.plan_id,
@@ -461,6 +635,9 @@ export default function MembresiasPage() {
       p_notas: formMembresia.notas || null,
       p_fecha_inicio_manual: formMembresia.fecha_inicio,
       p_renovacion_de_membresia_id: formMembresia.renovacion_de_membresia_id || null,
+      p_numero_comprobante: formMembresia.numero_comprobante || null,
+      p_banco_origen: formMembresia.banco_origen || null,
+      p_tipo_tarjeta: formMembresia.tipo_tarjeta || null,
     })
 
     if (error) {
@@ -471,8 +648,65 @@ export default function MembresiasPage() {
 
     await cargarDatos()
     limpiarMembresia()
-    setMensaje('Membresía y pago registrados correctamente con vigencia inteligente.')
+    setFiltroEstado('activa')
+    setMensaje('Membresía y pago registrados correctamente.')
     setGuardandoMembresia(false)
+  }
+
+  async function guardarEdicionMembresia(evento) {
+    evento.preventDefault()
+
+    if (!esDueno) {
+      setError('No tienes permisos para editar vigencias.')
+      return
+    }
+
+    if (!editandoMembresiaId || !membresiaSeleccionada) return
+
+    setGuardandoEdicion(true)
+    setError('')
+    setMensaje('')
+
+    if (!formEditarMembresia.fecha_inicio) {
+      setError('La fecha de inicio es obligatoria.')
+      setGuardandoEdicion(false)
+      return
+    }
+
+    const duracionDias = obtenerDuracionMembresia(membresiaSeleccionada)
+
+    if (!duracionDias || duracionDias <= 0) {
+      setError('No se pudo calcular la vigencia porque el plan no tiene duración válida.')
+      setGuardandoEdicion(false)
+      return
+    }
+
+    const fechaFinCalculada = calcularFechaFin(
+      formEditarMembresia.fecha_inicio,
+      duracionDias
+    )
+
+    const datos = {
+      fecha_inicio: formEditarMembresia.fecha_inicio,
+      fecha_fin: fechaFinCalculada,
+    }
+
+    const { error } = await supabase
+      .from('membresias')
+      .update(datos)
+      .eq('id', editandoMembresiaId)
+
+    if (error) {
+      setError(error.message)
+      setGuardandoEdicion(false)
+      return
+    }
+
+    await cargarDatos()
+    limpiarEdicionMembresia()
+    setFiltroEstado('activa')
+    setMensaje('Fecha de inicio actualizada y vigencia recalculada correctamente.')
+    setGuardandoEdicion(false)
   }
 
   async function suspenderMembresia(membresia) {
@@ -531,10 +765,10 @@ export default function MembresiasPage() {
       return
     }
 
-    const nombre = `${membresia.miembros?.nombre || ''} ${membresia.miembros?.apellido || ''}`.trim()
+    const nombre = obtenerNombreSocio(membresia)
 
     const confirmar = window.confirm(
-      `¿Seguro que deseas eliminar la membresía de ${nombre || 'este miembro'}?`
+      `¿Seguro que deseas eliminar la membresía de ${nombre}?`
     )
 
     if (!confirmar) return
@@ -566,6 +800,17 @@ export default function MembresiasPage() {
           estado_real: 'suspendida',
           dias_restantes: null,
           texto_vigencia: 'Suspendida manualmente',
+        }
+      }
+
+      if (membresia.fecha_inicio > hoy) {
+        const diasInicio = diferenciaDias(hoy, membresia.fecha_inicio)
+
+        return {
+          ...membresia,
+          estado_real: 'futura',
+          dias_restantes: diasInicio,
+          texto_vigencia: `Inicia en ${diasInicio} día${diasInicio === 1 ? '' : 's'}`,
         }
       }
 
@@ -614,9 +859,15 @@ export default function MembresiasPage() {
       const miembro = membresia.miembros || {}
       const plan = membresia.planes || {}
 
-      const coincideEstado = filtroEstado === 'todas'
-        ? true
-        : membresia.estado_real === filtroEstado
+      let coincideEstado = true
+
+      if (filtroEstado === 'activa') {
+        coincideEstado = ['activa', 'por_caducar', 'vence_hoy'].includes(membresia.estado_real)
+      } else if (filtroEstado === 'todas') {
+        coincideEstado = true
+      } else {
+        coincideEstado = membresia.estado_real === filtroEstado
+      }
 
       const valores = [
         miembro.nombre,
@@ -644,13 +895,18 @@ export default function MembresiasPage() {
   const planesActivos = planes.filter((plan) => plan.activo)
 
   const totalPagos = pagos.reduce((total, pago) => total + Number(pago.monto || 0), 0)
-  const membresiasActivas = membresiasConEstadoReal.filter((item) => item.estado_real === 'activa').length
-  const membresiasPorCaducar = membresiasConEstadoReal.filter((item) => item.estado_real === 'por_caducar' || item.estado_real === 'vence_hoy').length
+  const membresiasVigentes = membresiasConEstadoReal.filter((item) =>
+    ['activa', 'por_caducar', 'vence_hoy'].includes(item.estado_real)
+  ).length
+  const membresiasPorCaducar = membresiasConEstadoReal.filter((item) =>
+    item.estado_real === 'por_caducar' || item.estado_real === 'vence_hoy'
+  ).length
+  const membresiasFuturas = membresiasConEstadoReal.filter((item) => item.estado_real === 'futura').length
   const membresiasVencidas = membresiasConEstadoReal.filter((item) => item.estado_real === 'vencida').length
   const membresiasSuspendidas = membresiasConEstadoReal.filter((item) => item.estado_real === 'suspendida').length
 
   return (
-    <div>
+    <div className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
@@ -694,11 +950,11 @@ export default function MembresiasPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-6 md:gap-4">
         <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
-          <p className="text-xs text-gray-500 md:text-sm">Activas</p>
-          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-3xl">
-            {cargando ? '-' : membresiasActivas}
+          <p className="text-xs text-gray-500 md:text-sm">Vigentes</p>
+          <h2 className="mt-2 text-2xl font-bold text-green-700 md:text-3xl">
+            {cargando ? '-' : membresiasVigentes}
           </h2>
         </div>
 
@@ -706,6 +962,13 @@ export default function MembresiasPage() {
           <p className="text-xs text-gray-500 md:text-sm">Por caducar</p>
           <h2 className="mt-2 text-2xl font-bold text-orange-700 md:text-3xl">
             {cargando ? '-' : membresiasPorCaducar}
+          </h2>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <p className="text-xs text-gray-500 md:text-sm">Futuras</p>
+          <h2 className="mt-2 text-2xl font-bold text-blue-700 md:text-3xl">
+            {cargando ? '-' : membresiasFuturas}
           </h2>
         </div>
 
@@ -723,9 +986,9 @@ export default function MembresiasPage() {
           </h2>
         </div>
 
-        <div className="col-span-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:col-span-1 md:p-5">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
           <p className="text-xs text-gray-500 md:text-sm">Pagos</p>
-          <h2 className="mt-2 text-2xl font-bold text-gray-900 md:text-2xl">
+          <h2 className="mt-2 text-xl font-bold text-gray-900 md:text-2xl">
             {cargando ? '-' : formatearDinero(totalPagos)}
           </h2>
         </div>
@@ -853,7 +1116,7 @@ export default function MembresiasPage() {
                 {formMembresia.renovacion_de_membresia_id ? 'Renovar membresía' : 'Registrar nueva membresía'}
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                La fecha de inicio se calcula para no perder días si el socio aún tiene vigencia.
+                Registra membresía y respaldo del pago cuando aplique.
               </p>
             </div>
 
@@ -904,7 +1167,7 @@ export default function MembresiasPage() {
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                Fecha de inicio inteligente
+                Fecha de inicio
               </label>
               <input
                 type="date"
@@ -912,9 +1175,6 @@ export default function MembresiasPage() {
                 onChange={(e) => actualizarMembresia('fecha_inicio', e.target.value)}
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
               />
-              <p className="mt-1 text-xs text-gray-500">
-                El sistema evitará solapamientos de vigencia.
-              </p>
             </div>
 
             <div>
@@ -954,7 +1214,7 @@ export default function MembresiasPage() {
               <div className="flex min-h-[46px] items-center rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
                 {formMembresia.plan_id
                   ? formatearFecha(
-                      sumarDias(
+                      calcularFechaFin(
                         formMembresia.fecha_inicio,
                         planes.find((plan) => plan.id === formMembresia.plan_id)?.duracion_dias || 0
                       )
@@ -962,6 +1222,68 @@ export default function MembresiasPage() {
                   : 'Selecciona un plan'}
               </div>
             </div>
+
+            {formMembresia.metodo_pago === 'transferencia' && (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Número de comprobante / voucher
+                  </label>
+                  <input
+                    value={formMembresia.numero_comprobante}
+                    onChange={(e) => actualizarMembresia('numero_comprobante', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Ej: TRX-001234"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Banco de origen
+                  </label>
+                  <input
+                    value={formMembresia.banco_origen}
+                    onChange={(e) => actualizarMembresia('banco_origen', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Ej: Banco Pichincha"
+                  />
+                </div>
+              </>
+            )}
+
+            {formMembresia.metodo_pago === 'tarjeta' && (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Tipo de tarjeta
+                  </label>
+                  <select
+                    value={formMembresia.tipo_tarjeta}
+                    onChange={(e) => actualizarMembresia('tipo_tarjeta', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                  >
+                    <option value="">Seleccionar tarjeta</option>
+                    {tiposTarjeta.map((tarjeta) => (
+                      <option key={tarjeta.value} value={tarjeta.value}>
+                        {tarjeta.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Número de comprobante / voucher
+                  </label>
+                  <input
+                    value={formMembresia.numero_comprobante}
+                    onChange={(e) => actualizarMembresia('numero_comprobante', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Ej: POS-001234"
+                  />
+                </div>
+              </>
+            )}
 
             <div className="md:col-span-3">
               <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -989,6 +1311,94 @@ export default function MembresiasPage() {
                 type="button"
                 onClick={limpiarMembresia}
                 className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {esDueno && mostrarEditarMembresia && (
+        <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-sm md:p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                Editar fecha de inicio
+              </h2>
+              <p className="mt-1 text-sm text-gray-700">
+                {membresiaSeleccionada
+                  ? `${obtenerNombreSocio(membresiaSeleccionada)} · ${obtenerNombrePlan(membresiaSeleccionada)}`
+                  : 'Actualiza la fecha de inicio de la membresía.'}
+              </p>
+            </div>
+
+            <button
+              onClick={limpiarEdicionMembresia}
+              className="rounded-xl p-2 text-gray-500 transition hover:bg-white hover:text-gray-900"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <form onSubmit={guardarEdicionMembresia} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Nueva fecha de inicio
+              </label>
+              <input
+                type="date"
+                value={formEditarMembresia.fecha_inicio}
+                onChange={(e) => actualizarEdicionMembresia('fecha_inicio', e.target.value)}
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Duración del plan
+              </label>
+              <div className="flex min-h-[46px] items-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700">
+                {membresiaSeleccionada
+                  ? `${obtenerDuracionMembresia(membresiaSeleccionada)} días`
+                  : '-'}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Nueva fecha fin calculada
+              </label>
+              <div className="flex min-h-[46px] items-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700">
+                {membresiaSeleccionada && formEditarMembresia.fecha_inicio
+                  ? formatearFecha(
+                      calcularFechaFin(
+                        formEditarMembresia.fecha_inicio,
+                        obtenerDuracionMembresia(membresiaSeleccionada)
+                      )
+                    )
+                  : '-'}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-orange-200 bg-white p-4 text-sm text-orange-800 md:col-span-3">
+              Solo se modifica la fecha de inicio. La fecha final se calcula automáticamente según la duración real del plan contratado.
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row md:col-span-3">
+              <button
+                type="submit"
+                disabled={guardandoEdicion}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Save size={18} />
+                {guardandoEdicion ? 'Guardando...' : 'Guardar nueva fecha de inicio'}
+              </button>
+
+              <button
+                type="button"
+                onClick={limpiarEdicionMembresia}
+                className="rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
               >
                 Cancelar
               </button>
@@ -1076,7 +1486,7 @@ export default function MembresiasPage() {
             <div>
               <h2 className="text-lg font-bold text-gray-900">Listado de membresías</h2>
               <p className="text-sm text-gray-500">
-                Total registradas: {membresias.length}
+                Vista principal: membresías vigentes. Usa los filtros para ver futuras, vencidas o suspendidas.
               </p>
             </div>
 
@@ -1096,12 +1506,13 @@ export default function MembresiasPage() {
 
           <div className="flex gap-2 overflow-x-auto pb-1">
             {[
-              ['todas', 'Todas'],
-              ['activa', 'Activas'],
+              ['activa', 'Vigentes'],
               ['por_caducar', 'Por caducar'],
               ['vence_hoy', 'Vence hoy'],
+              ['futura', 'Futuras'],
               ['vencida', 'Vencidas'],
               ['suspendida', 'Suspendidas'],
+              ['todas', 'Todas'],
             ].map(([valor, etiqueta]) => (
               <button
                 key={valor}
@@ -1127,9 +1538,9 @@ export default function MembresiasPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
               <UserRound size={24} className="text-gray-500" />
             </div>
-            <p className="font-semibold text-gray-900">No hay membresías registradas</p>
+            <p className="font-semibold text-gray-900">No hay membresías en este filtro</p>
             <p className="mt-1 text-sm text-gray-500">
-              Registra la primera membresía para empezar.
+              Cambia el filtro o registra una nueva membresía.
             </p>
           </div>
         ) : (
@@ -1200,56 +1611,65 @@ export default function MembresiasPage() {
                       </p>
                     </div>
 
-                    <div className="mt-4 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-gray-500">Pago</p>
-                        <p className="font-bold text-gray-900">
-                          {formatearDinero(pago?.monto)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {pago?.metodo_pago || '-'}
-                        </p>
-                      </div>
+                    <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-3">
+                      <p className="text-xs font-semibold text-gray-500">Pago</p>
+                      <p className="font-bold text-gray-900">
+                        {formatearDinero(pago?.monto)}
+                      </p>
+                      <p className="mt-1 text-xs capitalize text-gray-500">
+                        Método: {pago?.metodo_pago || '-'}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {obtenerDetallePago(pago)}
+                      </p>
+                    </div>
 
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => renovarMembresia(membresia)}
-                          className="rounded-lg border border-blue-100 p-2 text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
-                          title="Renovar"
-                        >
-                          <RefreshCw size={17} />
-                        </button>
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        onClick={() => renovarMembresia(membresia)}
+                        className="rounded-lg border border-blue-100 p-2 text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
+                        title="Renovar"
+                      >
+                        <RefreshCw size={17} />
+                      </button>
 
-                        {esDueno && (
-                          <>
-                            {membresia.estado === 'suspendida' ? (
-                              <button
-                                onClick={() => activarMembresia(membresia)}
-                                className="rounded-lg border border-green-100 p-2 text-green-600 transition hover:bg-green-50 hover:text-green-700"
-                                title="Activar"
-                              >
-                                <Pencil size={17} />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => suspenderMembresia(membresia)}
-                                className="rounded-lg border border-yellow-100 p-2 text-yellow-600 transition hover:bg-yellow-50 hover:text-yellow-700"
-                                title="Suspender"
-                              >
-                                <Pencil size={17} />
-                              </button>
-                            )}
+                      {esDueno && (
+                        <>
+                          <button
+                            onClick={() => abrirEditarMembresia(membresia)}
+                            className="rounded-lg border border-orange-100 p-2 text-orange-600 transition hover:bg-orange-50 hover:text-orange-700"
+                            title="Editar fecha de inicio"
+                          >
+                            <CalendarDays size={17} />
+                          </button>
 
+                          {membresia.estado === 'suspendida' ? (
                             <button
-                              onClick={() => eliminarMembresia(membresia)}
-                              className="rounded-lg border border-red-100 p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
-                              title="Eliminar"
+                              onClick={() => activarMembresia(membresia)}
+                              className="rounded-lg border border-green-100 p-2 text-green-600 transition hover:bg-green-50 hover:text-green-700"
+                              title="Activar"
                             >
-                              <Trash2 size={17} />
+                              <Pencil size={17} />
                             </button>
-                          </>
-                        )}
-                      </div>
+                          ) : (
+                            <button
+                              onClick={() => suspenderMembresia(membresia)}
+                              className="rounded-lg border border-yellow-100 p-2 text-yellow-600 transition hover:bg-yellow-50 hover:text-yellow-700"
+                              title="Suspender"
+                            >
+                              <Pencil size={17} />
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => eliminarMembresia(membresia)}
+                            className="rounded-lg border border-red-100 p-2 text-red-500 transition hover:bg-red-50 hover:text-red-700"
+                            title="Eliminar"
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )
@@ -1257,7 +1677,7 @@ export default function MembresiasPage() {
             </div>
 
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[1150px] text-left text-sm">
+              <table className="w-full min-w-[1250px] text-left text-sm">
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                   <tr>
                     <th className="px-5 py-3">Miembro</th>
@@ -1327,8 +1747,11 @@ export default function MembresiasPage() {
                           <div className="font-semibold text-gray-900">
                             {formatearDinero(pago?.monto)}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs capitalize text-gray-500">
                             {pago?.metodo_pago || '-'}
+                          </div>
+                          <div className="mt-1 max-w-[280px] text-xs text-gray-500">
+                            {obtenerDetallePago(pago)}
                           </div>
                         </td>
 
@@ -1344,6 +1767,14 @@ export default function MembresiasPage() {
 
                             {esDueno && (
                               <>
+                                <button
+                                  onClick={() => abrirEditarMembresia(membresia)}
+                                  className="rounded-lg p-2 text-orange-600 transition hover:bg-orange-50 hover:text-orange-700"
+                                  title="Editar fecha de inicio"
+                                >
+                                  <CalendarDays size={17} />
+                                </button>
+
                                 {membresia.estado === 'suspendida' ? (
                                   <button
                                     onClick={() => activarMembresia(membresia)}

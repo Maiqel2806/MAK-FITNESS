@@ -83,25 +83,7 @@ function obtenerNombrePlan(membresia) {
 function obtenerEstadoMembresia(membresias) {
   const hoy = obtenerFechaHoy()
 
-  const suspendidaActual = membresias.find((membresia) => {
-    return (
-      membresia.estado === 'suspendida' &&
-      membresia.fecha_inicio <= hoy &&
-      membresia.fecha_fin >= hoy
-    )
-  })
-
-  if (suspendidaActual) {
-    return {
-      autorizado: false,
-      tipo: 'suspendida',
-      titulo: 'Membresía suspendida',
-      mensaje: 'El socio tiene una membresía suspendida. No se permite registrar entrada.',
-      membresia: suspendidaActual,
-    }
-  }
-
-  const vigente = membresias
+  const vigentesActivas = membresias
     .filter((membresia) => {
       return (
         membresia.estado === 'activa' &&
@@ -109,7 +91,15 @@ function obtenerEstadoMembresia(membresias) {
         membresia.fecha_fin >= hoy
       )
     })
-    .sort((a, b) => String(b.fecha_fin).localeCompare(String(a.fecha_fin)))[0]
+    .sort((a, b) => {
+      const fechaFinComparacion = String(b.fecha_fin).localeCompare(String(a.fecha_fin))
+
+      if (fechaFinComparacion !== 0) return fechaFinComparacion
+
+      return String(b.fecha_inicio).localeCompare(String(a.fecha_inicio))
+    })
+
+  const vigente = vigentesActivas[0]
 
   if (vigente) {
     const diasRestantes = diferenciaDias(hoy, vigente.fecha_fin)
@@ -140,6 +130,24 @@ function obtenerEstadoMembresia(membresias) {
       titulo: 'Membresía vigente',
       mensaje: `El socio puede ingresar. Su membresía vence el ${formatearFecha(vigente.fecha_fin)}.`,
       membresia: vigente,
+    }
+  }
+
+  const suspendidaActual = membresias.find((membresia) => {
+    return (
+      membresia.estado === 'suspendida' &&
+      membresia.fecha_inicio <= hoy &&
+      membresia.fecha_fin >= hoy
+    )
+  })
+
+  if (suspendidaActual) {
+    return {
+      autorizado: false,
+      tipo: 'suspendida',
+      titulo: 'Membresía suspendida',
+      mensaje: 'El socio tiene una membresía suspendida y no tiene otra membresía activa vigente. No se permite registrar entrada.',
+      membresia: suspendidaActual,
     }
   }
 
