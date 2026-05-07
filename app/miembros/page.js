@@ -44,6 +44,94 @@ const formularioInicial = {
   foto_path: '',
 }
 
+async function comprimirFotoMiembro(archivo) {
+  const maxAncho = 900
+  const maxAlto = 900
+  const pesoMaximoBytes = 900 * 1024
+  const calidadInicial = 0.85
+  const calidadMinima = 0.45
+
+  return new Promise((resolve, reject) => {
+    const imagen = new Image()
+    const urlTemporal = URL.createObjectURL(archivo)
+
+    imagen.onload = async () => {
+      URL.revokeObjectURL(urlTemporal)
+
+      let ancho = imagen.width
+      let alto = imagen.height
+
+      if (ancho > alto && ancho > maxAncho) {
+        alto = Math.round((alto * maxAncho) / ancho)
+        ancho = maxAncho
+      } else if (alto > maxAlto) {
+        ancho = Math.round((ancho * maxAlto) / alto)
+        alto = maxAlto
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = ancho
+      canvas.height = alto
+
+      const contexto = canvas.getContext('2d')
+
+      if (!contexto) {
+        reject(new Error('No se pudo preparar la compresión de la foto.'))
+        return
+      }
+
+      contexto.drawImage(imagen, 0, 0, ancho, alto)
+
+      async function convertirConCalidad(calidad) {
+        return new Promise((resolverBlob) => {
+          canvas.toBlob(
+            (blob) => {
+              resolverBlob(blob)
+            },
+            'image/jpeg',
+            calidad
+          )
+        })
+      }
+
+      let calidad = calidadInicial
+      let blob = await convertirConCalidad(calidad)
+
+      while (blob && blob.size > pesoMaximoBytes && calidad > calidadMinima) {
+        calidad = Number((calidad - 0.1).toFixed(2))
+        blob = await convertirConCalidad(calidad)
+      }
+
+      if (!blob) {
+        reject(new Error('No se pudo comprimir la foto.'))
+        return
+      }
+
+      const nombreBase = archivo.name
+        ? archivo.name.replace(/\.[^/.]+$/, '')
+        : 'foto-miembro'
+
+      const fotoComprimida = new File(
+        [blob],
+        `${nombreBase}.jpg`,
+        {
+          type: 'image/jpeg',
+          lastModified: Date.now(),
+        }
+      )
+
+      resolve(fotoComprimida)
+    }
+
+    imagen.onerror = () => {
+      URL.revokeObjectURL(urlTemporal)
+      reject(new Error('No se pudo procesar la imagen seleccionada.'))
+    }
+
+    imagen.src = urlTemporal
+  })
+}
+
 export default function MiembrosPage() {
   const [miembros, setMiembros] = useState([])
   const [formulario, setFormulario] = useState(formularioInicial)
@@ -137,27 +225,40 @@ export default function MiembrosPage() {
     }, 100)
   }
 
-  function seleccionarFoto(evento) {
+  async function seleccionarFoto(evento) {
     const archivo = evento.target.files?.[0]
 
     if (!archivo) return
 
-    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/webp']
-
-    if (!tiposPermitidos.includes(archivo.type)) {
-      setError('La foto debe ser JPG, PNG o WEBP.')
+    if (!archivo.type.startsWith('image/')) {
+      setError('El archivo debe ser una imagen.')
       return
     }
 
-    if (archivo.size > 5 * 1024 * 1024) {
-      setError('La foto no debe superar los 5 MB.')
+    if (archivo.size > 12 * 1024 * 1024) {
+      setError('La foto original no debe superar los 12 MB.')
       return
     }
 
-    setArchivoFoto(archivo)
-    setPreviewFoto(URL.createObjectURL(archivo))
-    setError('')
-    setMensaje('')
+    try {
+      setError('')
+      setMensaje('Comprimiendo foto...')
+
+      const fotoComprimida = await comprimirFotoMiembro(archivo)
+
+      if (fotoComprimida.size > 1024 * 1024) {
+        setError('La foto no pudo comprimirse por debajo de 1 MB. Intenta tomarla nuevamente con mejor iluminación.')
+        setMensaje('')
+        return
+      }
+
+      setArchivoFoto(fotoComprimida)
+      setPreviewFoto(URL.createObjectURL(fotoComprimida))
+      setMensaje(`Foto lista para guardar. Peso final: ${(fotoComprimida.size / 1024).toFixed(0)} KB.`)
+    } catch (error) {
+      setError(error.message)
+      setMensaje('')
+    }
   }
 
   async function subirFoto() {
@@ -168,8 +269,11 @@ export default function MiembrosPage() {
       }
     }
 
-    const extension = archivoFoto.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const nombreArchivo = `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`
+    if (archivoFoto.size > 1024 * 1024) {
+      throw new Error('La foto supera 1 MB. Selecciona o toma otra foto.')
+    }
+
+    const nombreArchivo = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`
     const rutaArchivo = `miembros/${nombreArchivo}`
 
     const { error } = await supabase.storage
@@ -177,6 +281,7 @@ export default function MiembrosPage() {
       .upload(rutaArchivo, archivoFoto, {
         cacheControl: '3600',
         upsert: false,
+        contentType: 'image/jpeg',
       })
 
     if (error) {
@@ -247,9 +352,13 @@ export default function MiembrosPage() {
         return
       }
 
+      const mensajeFinal = editandoId
+        ? 'Miembro actualizado correctamente.'
+        : 'Miembro registrado correctamente.'
+
       await cargarMiembros()
       limpiarFormulario()
-      setMensaje(editandoId ? 'Miembro actualizado correctamente.' : 'Miembro registrado correctamente.')
+      setMensaje(mensajeFinal)
       setGuardando(false)
     } catch (error) {
       setError(error.message)
@@ -313,7 +422,7 @@ export default function MiembrosPage() {
   }, [miembros, busqueda])
 
   return (
-    <div>
+    <div className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Miembros</h1>
@@ -351,7 +460,7 @@ export default function MiembrosPage() {
                 {editandoId ? 'Editar miembro' : 'Registrar nuevo miembro'}
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                La foto será usada para validar visualmente la entrada del socio.
+                La foto será comprimida automáticamente antes de guardarse.
               </p>
             </div>
 
@@ -393,7 +502,7 @@ export default function MiembrosPage() {
               </label>
 
               <p className="mt-3 text-xs text-gray-500">
-                Desde celular se abrirá la cámara. Formatos permitidos: JPG, PNG o WEBP. Máximo 5 MB.
+                Desde celular se abrirá la cámara. La foto se comprime automáticamente y no se permite guardar si supera 1 MB.
               </p>
 
               <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 text-center">
