@@ -1148,6 +1148,37 @@ export default function MembresiasPage() {
     })
   }, [membresias])
 
+  const idsSociosConMembresiaActualOFutura = useMemo(() => {
+    return new Set(
+      membresiasConEstadoReal
+        .filter((membresia) =>
+          ['activa', 'por_caducar', 'vence_hoy', 'futura'].includes(
+            membresia.estado_real
+          )
+        )
+        .map((membresia) => membresia.miembro_id)
+    )
+  }, [membresiasConEstadoReal])
+
+  const ultimaMembresiaVencidaPorSocio = useMemo(() => {
+    const mapa = new Map()
+
+    membresiasConEstadoReal.forEach((membresia) => {
+      if (membresia.estado_real !== 'vencida') return
+
+      const actual = mapa.get(membresia.miembro_id)
+
+      if (
+        !actual ||
+        String(membresia.fecha_fin).localeCompare(String(actual.fecha_fin)) > 0
+      ) {
+        mapa.set(membresia.miembro_id, membresia)
+      }
+    })
+
+    return mapa
+  }, [membresiasConEstadoReal])
+
   const membresiasFiltradas = useMemo(() => {
     const texto = busqueda.toLowerCase().trim()
 
@@ -1158,7 +1189,18 @@ export default function MembresiasPage() {
       let coincideEstado = true
 
       if (filtroEstado === 'activa') {
-        coincideEstado = ['activa', 'por_caducar', 'vence_hoy'].includes(membresia.estado_real)
+        coincideEstado = ['activa', 'por_caducar', 'vence_hoy'].includes(
+          membresia.estado_real
+        )
+      } else if (filtroEstado === 'vencida') {
+        const ultimaVencida = ultimaMembresiaVencidaPorSocio.get(
+          membresia.miembro_id
+        )
+
+        coincideEstado =
+          membresia.estado_real === 'vencida' &&
+          !idsSociosConMembresiaActualOFutura.has(membresia.miembro_id) &&
+          ultimaVencida?.id === membresia.id
       } else if (filtroEstado === 'todas') {
         coincideEstado = true
       } else {
@@ -1180,15 +1222,26 @@ export default function MembresiasPage() {
 
       const coincideBusqueda = texto
         ? valores.some((valor) =>
-            String(valor || '').toLowerCase().includes(texto)
+            String(valor || '')
+              .toLowerCase()
+              .includes(texto)
           )
         : true
 
       return coincideEstado && coincideBusqueda
     })
-  }, [membresiasConEstadoReal, busqueda, filtroEstado])
+  }, [
+    membresiasConEstadoReal,
+    busqueda,
+    filtroEstado,
+    idsSociosConMembresiaActualOFutura,
+    ultimaMembresiaVencidaPorSocio,
+  ])
 
-  const miembrosActivos = miembros.filter((miembro) => miembro.estado === 'activo')
+  const miembrosActivos = miembros.filter(
+    (miembro) => miembro.estado === 'activo'
+  )
+
   const planesActivos = planes.filter((plan) => plan.activo)
 
   const planesDisponiblesVenta = planesActivos.filter((plan) => {
@@ -1221,16 +1274,35 @@ export default function MembresiasPage() {
     return planes
   }, [planes, esDueno, pestanaPlanes])
 
-  const totalPagos = pagos.reduce((total, pago) => total + Number(pago.monto || 0), 0)
+  const totalPagos = pagos.reduce(
+    (total, pago) => total + Number(pago.monto || 0),
+    0
+  )
+
   const membresiasVigentes = membresiasConEstadoReal.filter((item) =>
     ['activa', 'por_caducar', 'vence_hoy'].includes(item.estado_real)
   ).length
-  const membresiasPorCaducar = membresiasConEstadoReal.filter((item) =>
-    item.estado_real === 'por_caducar' || item.estado_real === 'vence_hoy'
+
+  const membresiasPorCaducar = membresiasConEstadoReal.filter(
+    (item) =>
+      item.estado_real === 'por_caducar' ||
+      item.estado_real === 'vence_hoy'
   ).length
-  const membresiasFuturas = membresiasConEstadoReal.filter((item) => item.estado_real === 'futura').length
-  const membresiasVencidas = membresiasConEstadoReal.filter((item) => item.estado_real === 'vencida').length
-  const membresiasSuspendidas = membresiasConEstadoReal.filter((item) => item.estado_real === 'suspendida').length
+
+  const membresiasFuturas = membresiasConEstadoReal.filter(
+    (item) => item.estado_real === 'futura'
+  ).length
+
+  const membresiasVencidas = Array.from(
+    ultimaMembresiaVencidaPorSocio.values()
+  ).filter(
+    (item) =>
+      !idsSociosConMembresiaActualOFutura.has(item.miembro_id)
+  ).length
+
+  const membresiasSuspendidas = membresiasConEstadoReal.filter(
+    (item) => item.estado_real === 'suspendida'
+  ).length
 
   const membresiaActivaSocioSeleccionado = membresiasConEstadoReal.find((membresia) => {
     return (
