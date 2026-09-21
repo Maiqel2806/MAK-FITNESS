@@ -8,12 +8,12 @@ import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
 
+// MAK_PERMISOS_EMPLEADOS_ESTABLE_V3
+
 const rutasPublicas = ['/login']
 
 const rutasEmpleado = [
-  '/dashboard',
   '/miembros',
-  '/membresias',
   '/asistencia',
   '/inventario',
 ]
@@ -21,13 +21,19 @@ const rutasEmpleado = [
 function rutaPermitida(pathname, perfil) {
   if (!perfil) return false
 
-  if (perfil.rol === 'dueno') return true
+  if (['dueno', 'administrador'].includes(perfil.rol)) return true
 
   if (perfil.rol === 'empleado') {
-    return rutasEmpleado.some((ruta) => pathname.startsWith(ruta))
+    return rutasEmpleado.some(
+      (ruta) => pathname === ruta || pathname.startsWith(`${ruta}/`)
+    )
   }
 
   return false
+}
+
+function rutaInicioPorRol(perfil) {
+  return perfil?.rol === 'empleado' ? '/miembros' : '/dashboard'
 }
 
 export default function AppShell({ children }) {
@@ -105,7 +111,7 @@ export default function AppShell({ children }) {
       setPerfil(perfilActual)
 
       if (pathname === '/login') {
-        router.replace('/dashboard')
+        router.replace(rutaInicioPorRol(perfilActual))
 
         if (mostrarCarga) {
           setCargando(false)
@@ -115,7 +121,7 @@ export default function AppShell({ children }) {
       }
 
       if (!rutaPermitida(pathname, perfilActual)) {
-        router.replace('/dashboard')
+        router.replace(rutaInicioPorRol(perfilActual))
 
         if (mostrarCarga) {
           setCargando(false)
@@ -184,6 +190,16 @@ export default function AppShell({ children }) {
   }
 
   if (!sesion || !perfil) return null
+
+  if (!rutaPermitida(pathname, perfil)) {
+    return (
+      <div className="safe-screen flex min-h-screen items-center justify-center bg-gray-100 p-4">
+        <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
+          <p className="text-sm font-semibold text-gray-900">Redirigiendo...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <UserProvider perfil={perfil}>

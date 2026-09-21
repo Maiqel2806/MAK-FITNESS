@@ -90,36 +90,359 @@ function obtenerFechaHoy() {
   return `${year}-${month}-${day}`
 }
 
+function obtenerMesActual() {
+  return obtenerFechaHoy().slice(0, 7)
+}
+
+function formatearMes(valor) {
+  if (!valor || valor === 'todas') {
+    return 'Todas las caducadas'
+  }
+
+  const [year, month] = valor.split('-').map(Number)
+
+  const fecha = new Date(
+    year,
+    month - 1,
+    1
+  )
+
+  const texto = new Intl.DateTimeFormat(
+    'es-EC',
+    {
+      month: 'long',
+      year: 'numeric',
+    }
+  ).format(fecha)
+
+  return (
+    texto.charAt(0).toUpperCase() +
+    texto.slice(1)
+  )
+}
+
 function sumarDias(fecha, dias) {
-  const date = new Date(`${fecha}T00:00:00`)
-  date.setDate(date.getDate() + Number(dias || 0))
+  if (!fecha) return ''
 
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
+  const [year, month, day] = String(fecha)
+    .slice(0, 10)
+    .split('-')
+    .map(Number)
 
-  return `${year}-${month}-${day}`
+  const date = new Date(
+    Date.UTC(
+      year,
+      month - 1,
+      day
+    )
+  )
+
+  date.setUTCDate(
+    date.getUTCDate() +
+      Number(dias || 0)
+  )
+
+  return `${date.getUTCFullYear()}-${String(
+    date.getUTCMonth() + 1
+  ).padStart(2, '0')}-${String(
+    date.getUTCDate()
+  ).padStart(2, '0')}`
 }
 
-function calcularFechaFin(fechaInicio, duracionDias) {
-  if (!fechaInicio || !duracionDias) return ''
+function calcularFechaFin(
+  fechaInicio,
+  duracionDias
+) {
+  if (
+    !fechaInicio ||
+    !duracionDias
+  ) {
+    return ''
+  }
 
-  const diasVigentes = Math.max(Number(duracionDias || 1) - 1, 0)
-  return sumarDias(fechaInicio, diasVigentes)
+  return sumarDias(
+    fechaInicio,
+    Math.max(
+      Number(
+        duracionDias || 1
+      ) - 1,
+      0
+    )
+  )
 }
 
-function obtenerDuracionMembresia(membresia) {
+function calcularFechaRenovacionCalendario(
+  fechaInicio,
+  duracionMeses,
+  diaAncla = null
+) {
+  if (
+    !fechaInicio ||
+    !duracionMeses
+  ) {
+    return ''
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] = String(fechaInicio)
+    .slice(0, 10)
+    .split('-')
+    .map(Number)
+
+  const meses =
+    Number(
+      duracionMeses || 0
+    )
+
+  if (meses <= 0) {
+    return ''
+  }
+
+  const ancla = Math.min(
+    31,
+    Math.max(
+      1,
+      Number(
+        diaAncla || day
+      )
+    )
+  )
+
+  const indice =
+    year * 12 +
+    (month - 1) +
+    meses
+
+  const yearDestino =
+    Math.floor(
+      indice / 12
+    )
+
+  const monthDestino =
+    indice % 12
+
+  const ultimoDia =
+    new Date(
+      Date.UTC(
+        yearDestino,
+        monthDestino + 1,
+        0
+      )
+    ).getUTCDate()
+
+  const diaDestino =
+    Math.min(
+      ancla,
+      ultimoDia
+    )
+
+  return `${yearDestino}-${String(
+    monthDestino + 1
+  ).padStart(2, '0')}-${String(
+    diaDestino
+  ).padStart(2, '0')}`
+}
+
+function obtenerDuracionMembresia(
+  membresia
+) {
   return Number(
-    membresia?.plan_duracion_dias_snapshot ||
-      membresia?.planes?.duracion_dias ||
+    membresia
+      ?.plan_duracion_dias_snapshot ||
+      membresia
+        ?.planes
+        ?.duracion_dias ||
       0
   )
 }
 
+function obtenerDuracionMesesSnapshot(
+  membresia
+) {
+  return Number(
+    membresia
+      ?.plan_duracion_meses_snapshot ||
+      0
+  )
+}
+
+function obtenerDuracionMesesParaCalculo(
+  membresia
+) {
+  return Number(
+    membresia
+      ?.plan_duracion_meses_snapshot ||
+      membresia
+        ?.planes
+        ?.duracion_meses ||
+      0
+  )
+}
+
+function obtenerFechaRenovacionMembresia(
+  membresia
+) {
+  return membresia?.fecha_fin
+    ? sumarDias(
+        membresia.fecha_fin,
+        1
+      )
+    : ''
+}
+
+function calcularFechaRenovacionPlan(
+  fechaInicio,
+  plan
+) {
+  if (
+    !fechaInicio ||
+    !plan
+  ) {
+    return ''
+  }
+
+  const meses =
+    Number(
+      plan.duracion_meses ||
+        0
+    )
+
+  if (meses > 0) {
+    return calcularFechaRenovacionCalendario(
+      fechaInicio,
+      meses,
+      Number(
+        String(
+          fechaInicio
+        ).slice(8, 10)
+      )
+    )
+  }
+
+  const fin =
+    calcularFechaFin(
+      fechaInicio,
+      plan.duracion_dias
+    )
+
+  return fin
+    ? sumarDias(fin, 1)
+    : ''
+}
+
+function calcularFechaRenovacionDesdeMembresia(
+  membresia,
+  fechaInicio
+) {
+  const meses =
+    obtenerDuracionMesesParaCalculo(
+      membresia
+    )
+
+  if (meses > 0) {
+    return calcularFechaRenovacionCalendario(
+      fechaInicio,
+      meses,
+      Number(
+        String(
+          fechaInicio
+        ).slice(8, 10)
+      )
+    )
+  }
+
+  const fin =
+    calcularFechaFin(
+      fechaInicio,
+      obtenerDuracionMembresia(
+        membresia
+      )
+    )
+
+  return fin
+    ? sumarDias(fin, 1)
+    : ''
+}
+
+function obtenerTextoDuracionMembresia(
+  membresia
+) {
+  const meses =
+    obtenerDuracionMesesSnapshot(
+      membresia
+    )
+
+  if (meses > 0) {
+    return `${meses} mes${
+      meses === 1
+        ? ''
+        : 'es'
+    }`
+  }
+
+  const dias =
+    obtenerDuracionMembresia(
+      membresia
+    )
+
+  return `${dias} día${
+    dias === 1
+      ? ''
+      : 's'
+  }`
+}
+
+function inferirDuracionMeses(
+  dias
+) {
+  return ({
+    30: 1,
+    60: 2,
+    90: 3,
+    180: 6,
+    365: 12,
+  })[
+    Number(dias)
+  ] || null
+}
+
 function diferenciaDias(fechaDesde, fechaHasta) {
-  const inicio = new Date(`${fechaDesde}T00:00:00`)
-  const fin = new Date(`${fechaHasta}T00:00:00`)
-  return Math.round((fin - inicio) / (1000 * 60 * 60 * 24))
+  const [
+    aY,
+    aM,
+    aD,
+  ] = String(fechaDesde)
+    .slice(0, 10)
+    .split('-')
+    .map(Number)
+
+  const [
+    bY,
+    bM,
+    bD,
+  ] = String(fechaHasta)
+    .slice(0, 10)
+    .split('-')
+    .map(Number)
+
+  return Math.round(
+    (
+      Date.UTC(
+        bY,
+        bM - 1,
+        bD
+      ) -
+      Date.UTC(
+        aY,
+        aM - 1,
+        aD
+      )
+    ) /
+      86400000
+  )
 }
 
 function formatearDinero(valor) {
@@ -158,7 +481,7 @@ function obtenerClaseEstado(estado) {
 function obtenerEtiquetaEstado(estado) {
   if (estado === 'activa') return 'Vigente'
   if (estado === 'por_caducar') return 'Por caducar'
-  if (estado === 'vence_hoy') return 'Vence hoy'
+  if (estado === 'vence_hoy') return 'Renueva mañana'
   if (estado === 'futura') return 'Futura'
   if (estado === 'vencida') return 'Vencida'
   if (estado === 'suspendida') return 'Suspendida'
@@ -194,6 +517,106 @@ function obtenerDetallePago(pago) {
   }
 
   return 'Pago en efectivo'
+}
+
+// MAK_WHATSAPP_VENCIDAS_V1
+
+function normalizarTelefonoWhatsAppMembresia(telefono) {
+  const numero = String(
+    telefono || ''
+  ).replace(/\D/g, '')
+
+  if (
+    numero.startsWith('593') &&
+    numero.length === 12 &&
+    numero.slice(3).startsWith('9')
+  ) {
+    return numero
+  }
+
+  if (
+    numero.startsWith('09') &&
+    numero.length === 10
+  ) {
+    return `593${numero.slice(1)}`
+  }
+
+  if (
+    numero.startsWith('9') &&
+    numero.length === 9
+  ) {
+    return `593${numero}`
+  }
+
+  return ''
+}
+
+function crearMensajeRenovacion(membresia) {
+  const nombre =
+    obtenerNombreSocio(membresia)
+
+  return `*¡Este mes ha sido excelente!*
+
+Hola, *${nombre}*.
+
+Tu constancia, disciplina y esfuerzo ya comienzan a dar resultados, y queremos seguir acompañándote en cada paso.
+
+En *MAK FITNESS* somos más que un gimnasio: queremos ser parte de tu progreso y de cada meta que alcances.
+
+*Renueva hoy tu membresía*, sigue formando parte de nuestra comunidad y continúa trabajando por ese objetivo que te propusiste.
+
+*¡Vamos por más!*
+
+*MAK FITNESS*
+*Entrenamiento real, para resultados reales*`
+}
+
+function crearMensajeRecuperacion(membresia) {
+  const nombre =
+    obtenerNombreSocio(membresia)
+
+  return `*¡Es un buen momento para volver!*
+
+Hola, *${nombre}*.
+
+A veces hacemos una pausa, pero tus objetivos siguen ahí esperando por ti.
+
+En *MAK FITNESS* queremos verte nuevamente entrenando, recuperando el ritmo y avanzando con disciplina y constancia.
+
+*Retoma hoy tu entrenamiento y vuelve a trabajar por la mejor versión de ti.*
+
+*¡Te esperamos!*
+
+*MAK FITNESS*
+*Entrenamiento real, para resultados reales*`
+}
+
+function abrirWhatsAppMembresia(
+  telefono,
+  mensaje
+) {
+  const numero =
+    normalizarTelefonoWhatsAppMembresia(
+      telefono
+    )
+
+  if (!numero) {
+    window.alert(
+      'El socio no tiene un numero de WhatsApp valido.'
+    )
+    return
+  }
+
+  const url =
+    `https://wa.me/${numero}?text=${encodeURIComponent(
+      mensaje
+    )}`
+
+  window.open(
+    url,
+    '_blank',
+    'noopener,noreferrer'
+  )
 }
 
 function ajustarDetallePagoPorMetodo(nuevo, campo, valor) {
@@ -341,7 +764,11 @@ export default function MembresiasPage() {
 
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('activa')
-  const [pestanaPlanes, setPestanaPlanes] = useState('activos')
+  
+  const [filtroMesVencidas, setFiltroMesVencidas] = useState(
+    obtenerMesActual()
+  )
+const [pestanaPlanes, setPestanaPlanes] = useState('activos')
 
   const [cargando, setCargando] = useState(true)
   const [guardandoPlan, setGuardandoPlan] = useState(false)
@@ -351,6 +778,8 @@ export default function MembresiasPage() {
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [error, setError] = useState('')
   const [mensaje, setMensaje] = useState('')
+
+  const [detalleVencida, setDetalleVencida] = useState(null)
 
   useEffect(() => {
     cargarDatos()
@@ -395,6 +824,7 @@ export default function MembresiasPage() {
             nombre,
             precio,
             duracion_dias,
+            duracion_meses,
             tipo_plan,
             es_upgrade,
             es_promocion
@@ -604,7 +1034,7 @@ export default function MembresiasPage() {
       fecha_inicio: fechaInicio,
       metodo_pago: 'efectivo',
       monto: plan ? String(plan.precio) : String(membresia.plan_precio_snapshot || ''),
-      notas: `Renovación de membresía anterior con vencimiento ${formatearFecha(membresia.fecha_fin)}.`,
+      notas: `Renovación de membresía programada para ${formatearFecha(obtenerFechaRenovacionMembresia(membresia))}.`,
       renovacion_de_membresia_id: membresia.id,
       numero_comprobante: '',
       banco_origen: '',
@@ -614,7 +1044,7 @@ export default function MembresiasPage() {
     cerrarFormularios()
     setMostrarMembresia(true)
     setError('')
-    setMensaje('La fecha de inicio fue calculada automáticamente para no perder días de vigencia.')
+    setMensaje('La nueva membresía iniciará en la fecha de renovación correspondiente, sin perder días de vigencia.')
 
     setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -727,6 +1157,7 @@ export default function MembresiasPage() {
       descripcion: formPlan.descripcion.trim() || null,
       precio: Number(formPlan.precio),
       duracion_dias: Number(formPlan.duracion_dias),
+      duracion_meses: inferirDuracionMeses(formPlan.duracion_dias),
       activo: Boolean(formPlan.activo),
       es_promocion: Boolean(formPlan.es_promocion),
     }
@@ -969,22 +1400,63 @@ export default function MembresiasPage() {
       return
     }
 
-    const duracionDias = obtenerDuracionMembresia(membresiaSeleccionada)
+    const duracionMeses =
+      obtenerDuracionMesesParaCalculo(
+        membresiaSeleccionada
+      )
 
-    if (!duracionDias || duracionDias <= 0) {
-      setError('No se pudo calcular la vigencia porque el plan no tiene duración válida.')
-      setGuardandoEdicion(false)
+    const duracionDias =
+      obtenerDuracionMembresia(
+        membresiaSeleccionada
+      )
+
+    if (
+      duracionMeses <= 0 &&
+      duracionDias <= 0
+    ) {
+      setError(
+        'No se pudo calcular la vigencia porque el plan no tiene duración válida.'
+      )
+
+      setGuardandoEdicion(
+        false
+      )
+
       return
     }
 
-    const fechaFinCalculada = calcularFechaFin(
-      formEditarMembresia.fecha_inicio,
-      duracionDias
-    )
+    const diaAncla =
+      Number(
+        String(
+          formEditarMembresia.fecha_inicio
+        ).slice(8, 10)
+      )
+
+    const fechaRenovacion =
+      calcularFechaRenovacionDesdeMembresia(
+        membresiaSeleccionada,
+        formEditarMembresia.fecha_inicio
+      )
 
     const datos = {
-      fecha_inicio: formEditarMembresia.fecha_inicio,
-      fecha_fin: fechaFinCalculada,
+      fecha_inicio:
+        formEditarMembresia.fecha_inicio,
+
+      fecha_fin:
+        sumarDias(
+          fechaRenovacion,
+          -1
+        ),
+
+      dia_ancla_renovacion:
+        diaAncla,
+    }
+
+    if (
+      duracionMeses > 0
+    ) {
+      datos.plan_duracion_meses_snapshot =
+        duracionMeses
     }
 
     const { error } = await supabase
@@ -1086,6 +1558,51 @@ export default function MembresiasPage() {
     setMensaje('Membresía eliminada correctamente.')
   }
 
+  function abrirDetalleVencida(
+    membresia
+  ) {
+    if (
+      membresia.estado_real !==
+      'vencida'
+    ) {
+      return
+    }
+
+    setDetalleVencida(
+      membresia
+    )
+  }
+
+  function cerrarDetalleVencida() {
+    setDetalleVencida(null)
+  }
+
+  function enviarMensajeVencida(
+    tipo
+  ) {
+    if (!detalleVencida) {
+      return
+    }
+
+    const telefono =
+      detalleVencida.miembros
+        ?.telefono
+
+    const mensajeWhatsApp =
+      tipo === 'recuperacion'
+        ? crearMensajeRecuperacion(
+            detalleVencida
+          )
+        : crearMensajeRenovacion(
+            detalleVencida
+          )
+
+    abrirWhatsAppMembresia(
+      telefono,
+      mensajeWhatsApp
+    )
+  }
+
   const membresiasConEstadoReal = useMemo(() => {
     const hoy = obtenerFechaHoy()
 
@@ -1110,23 +1627,35 @@ export default function MembresiasPage() {
         }
       }
 
-      const dias = diferenciaDias(hoy, membresia.fecha_fin)
+      const fechaRenovacion =
+        obtenerFechaRenovacionMembresia(
+          membresia
+        )
 
-      if (dias < 0) {
+      const dias =
+        diferenciaDias(
+          hoy,
+          fechaRenovacion
+        )
+
+      if (dias <= 0) {
         return {
           ...membresia,
           estado_real: 'vencida',
           dias_restantes: dias,
-          texto_vigencia: `Vencida hace ${Math.abs(dias)} día${Math.abs(dias) === 1 ? '' : 's'}`,
+          texto_vigencia:
+            dias === 0
+              ? 'Renovación pendiente hoy'
+              : `Sin renovar hace ${Math.abs(dias)} día${Math.abs(dias) === 1 ? '' : 's'}`,
         }
       }
 
-      if (dias === 0) {
+      if (dias === 1) {
         return {
           ...membresia,
           estado_real: 'vence_hoy',
           dias_restantes: dias,
-          texto_vigencia: 'Vence hoy',
+          texto_vigencia: 'Renueva mañana',
         }
       }
 
@@ -1135,7 +1664,7 @@ export default function MembresiasPage() {
           ...membresia,
           estado_real: 'por_caducar',
           dias_restantes: dias,
-          texto_vigencia: `Vence en ${dias} día${dias === 1 ? '' : 's'}`,
+          texto_vigencia: `Renueva en ${dias} días`,
         }
       }
 
@@ -1143,7 +1672,7 @@ export default function MembresiasPage() {
         ...membresia,
         estado_real: 'activa',
         dias_restantes: dias,
-        texto_vigencia: `Vence en ${dias} días`,
+        texto_vigencia: `Renueva en ${dias} días`,
       }
     })
   }, [membresias])
@@ -1179,6 +1708,48 @@ export default function MembresiasPage() {
     return mapa
   }, [membresiasConEstadoReal])
 
+  const mesesDisponiblesVencidas = useMemo(() => {
+    const meses = new Set([
+      obtenerMesActual(),
+    ])
+
+    Array.from(
+      ultimaMembresiaVencidaPorSocio.values()
+    ).forEach((membresia) => {
+      if (
+        idsSociosConMembresiaActualOFutura.has(
+          membresia.miembro_id
+        )
+      ) {
+        return
+      }
+
+      const fechaRenovacion = String(
+        obtenerFechaRenovacionMembresia(
+          membresia
+        ) || ''
+      )
+
+      if (
+        fechaRenovacion.length >= 7
+      ) {
+        meses.add(
+          fechaRenovacion.slice(
+            0,
+            7
+          )
+        )
+      }
+    })
+
+    return Array.from(meses).sort(
+      (a, b) => b.localeCompare(a)
+    )
+  }, [
+    ultimaMembresiaVencidaPorSocio,
+    idsSociosConMembresiaActualOFutura,
+  ])
+
   const membresiasFiltradas = useMemo(() => {
     const texto = busqueda.toLowerCase().trim()
 
@@ -1193,14 +1764,28 @@ export default function MembresiasPage() {
           membresia.estado_real
         )
       } else if (filtroEstado === 'vencida') {
-        const ultimaVencida = ultimaMembresiaVencidaPorSocio.get(
-          membresia.miembro_id
-        )
+        const ultimaVencida =
+          ultimaMembresiaVencidaPorSocio.get(
+            membresia.miembro_id
+          )
+
+        const coincideMes =
+          filtroMesVencidas === 'todas' ||
+          String(
+            obtenerFechaRenovacionMembresia(
+              membresia
+            ) || ''
+          ).startsWith(
+            filtroMesVencidas
+          )
 
         coincideEstado =
           membresia.estado_real === 'vencida' &&
-          !idsSociosConMembresiaActualOFutura.has(membresia.miembro_id) &&
-          ultimaVencida?.id === membresia.id
+          !idsSociosConMembresiaActualOFutura.has(
+            membresia.miembro_id
+          ) &&
+          ultimaVencida?.id === membresia.id &&
+          coincideMes
       } else if (filtroEstado === 'todas') {
         coincideEstado = true
       } else {
@@ -1234,6 +1819,7 @@ export default function MembresiasPage() {
     membresiasConEstadoReal,
     busqueda,
     filtroEstado,
+    filtroMesVencidas,
     idsSociosConMembresiaActualOFutura,
     ultimaMembresiaVencidaPorSocio,
   ])
@@ -1298,6 +1884,25 @@ export default function MembresiasPage() {
   ).filter(
     (item) =>
       !idsSociosConMembresiaActualOFutura.has(item.miembro_id)
+  ).length
+
+  const membresiasVencidasPeriodo = Array.from(
+    ultimaMembresiaVencidaPorSocio.values()
+  ).filter(
+    (item) =>
+      !idsSociosConMembresiaActualOFutura.has(
+        item.miembro_id
+      ) &&
+      (
+        filtroMesVencidas === 'todas' ||
+        String(
+          obtenerFechaRenovacionMembresia(
+            item
+          ) || ''
+        ).startsWith(
+          filtroMesVencidas
+        )
+      )
   ).length
 
   const membresiasSuspendidas = membresiasConEstadoReal.filter(
@@ -1390,6 +1995,169 @@ export default function MembresiasPage() {
       {mensaje && (
         <div className="mt-5 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
           {mensaje}
+        </div>
+      )}
+
+      {detalleVencida && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={
+            cerrarDetalleVencida
+          }
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Membresía caducada
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  {obtenerNombreSocio(
+                    detalleVencida
+                  )}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  cerrarDetalleVencida
+                }
+                className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-3 rounded-xl bg-gray-50 p-4 text-sm sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Código
+                </p>
+                <p className="mt-1 font-bold text-gray-900">
+                  {detalleVencida.miembros
+                    ?.codigo_acceso ||
+                    '-'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  WhatsApp
+                </p>
+                <p className="mt-1 font-bold text-gray-900">
+                  {detalleVencida.miembros
+                    ?.telefono ||
+                    'Sin teléfono'}
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Último plan
+                </p>
+                <p className="mt-1 font-bold text-gray-900">
+                  {obtenerNombrePlan(
+                    detalleVencida
+                  )}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Inicio
+                </p>
+                <p className="mt-1 font-bold text-gray-900">
+                  {formatearFecha(
+                    detalleVencida.fecha_inicio
+                  )}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Debió renovar
+                </p>
+                <p className="mt-1 font-bold text-gray-900">
+                  {formatearFecha(
+                    obtenerFechaRenovacionMembresia(
+                      detalleVencida
+                    )
+                  )}
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Estado
+                </p>
+                <p className="mt-1 font-bold text-red-700">
+                  {detalleVencida.texto_vigencia}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="mb-3 text-sm text-gray-600">
+                Elige el mensaje que deseas enviar al socio:
+              </p>
+
+              <div className="grid grid-cols-1 gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    enviarMensajeVencida(
+                      'renovacion'
+                    )
+                  }
+                  disabled={
+                    !normalizarTelefonoWhatsAppMembresia(
+                      detalleVencida
+                        .miembros
+                        ?.telefono
+                    )
+                  }
+                  className="rounded-xl bg-black px-4 py-3 text-sm font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Enviar mensaje renovación
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    enviarMensajeVencida(
+                      'recuperacion'
+                    )
+                  }
+                  disabled={
+                    !normalizarTelefonoWhatsAppMembresia(
+                      detalleVencida
+                        .miembros
+                        ?.telefono
+                    )
+                  }
+                  className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-bold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Mensaje recuperación cliente
+                </button>
+              </div>
+
+              {!normalizarTelefonoWhatsAppMembresia(
+                detalleVencida.miembros
+                  ?.telefono
+              ) && (
+                <p className="mt-3 text-xs font-semibold text-red-600">
+                  El socio no tiene un número de WhatsApp válido registrado.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1803,8 +2571,8 @@ export default function MembresiasPage() {
 
           {membresiaActivaSocioSeleccionado && (
             <div className="mb-5 rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-              Este socio ya tiene una membresía vigente hasta el{' '}
-              <strong>{formatearFecha(membresiaActivaSocioSeleccionado.fecha_fin)}</strong>.
+              Este socio ya tiene una membresía vigente. Su próxima renovación es el{' '}
+              <strong>{formatearFecha(obtenerFechaRenovacionMembresia(membresiaActivaSocioSeleccionado))}</strong>.
               El sistema calculó la siguiente fecha disponible para evitar duplicar o cruzar vigencias.
             </div>
           )}
@@ -1894,14 +2662,18 @@ export default function MembresiasPage() {
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                Fecha fin calculada
+                Próxima renovación
               </label>
               <div className="flex min-h-[46px] items-center rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
                 {formMembresia.plan_id
                   ? formatearFecha(
-                      calcularFechaFin(
+                      calcularFechaRenovacionPlan(
                         formMembresia.fecha_inicio,
-                        planes.find((plan) => plan.id === formMembresia.plan_id)?.duracion_dias || 0
+                        planes.find(
+                          (plan) =>
+                            plan.id ===
+                            formMembresia.plan_id
+                        )
                       )
                     )
                   : 'Selecciona un plan'}
@@ -1988,21 +2760,24 @@ export default function MembresiasPage() {
               </label>
               <div className="flex min-h-[46px] items-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700">
                 {membresiaSeleccionada
-                  ? `${obtenerDuracionMembresia(membresiaSeleccionada)} días`
+                  ? obtenerTextoDuracionMembresia(
+                      membresiaSeleccionada
+                    )
                   : '-'}
               </div>
             </div>
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                Nueva fecha fin calculada
+                Nueva fecha de renovación
               </label>
               <div className="flex min-h-[46px] items-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700">
-                {membresiaSeleccionada && formEditarMembresia.fecha_inicio
+                {membresiaSeleccionada &&
+                formEditarMembresia.fecha_inicio
                   ? formatearFecha(
-                      calcularFechaFin(
-                        formEditarMembresia.fecha_inicio,
-                        obtenerDuracionMembresia(membresiaSeleccionada)
+                      calcularFechaRenovacionDesdeMembresia(
+                        membresiaSeleccionada,
+                        formEditarMembresia.fecha_inicio
                       )
                     )
                   : '-'}
@@ -2010,7 +2785,7 @@ export default function MembresiasPage() {
             </div>
 
             <div className="rounded-2xl border border-orange-200 bg-white p-4 text-sm text-orange-800 md:col-span-3">
-              Solo se modifica la fecha de inicio. La fecha final se calcula automáticamente según la duración real del plan contratado.
+              Solo se modifica la fecha de inicio. La próxima renovación se calcula automáticamente respetando el ciclo calendario del plan contratado.
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row md:col-span-3">
@@ -2180,7 +2955,7 @@ export default function MembresiasPage() {
             {[
               ['activa', 'Vigentes'],
               ['por_caducar', 'Por caducar'],
-              ['vence_hoy', 'Vence hoy'],
+              ['vence_hoy', 'Renueva mañana'],
               ['futura', 'Futuras'],
               ['vencida', 'Vencidas'],
               ['suspendida', 'Suspendidas'],
@@ -2200,6 +2975,53 @@ export default function MembresiasPage() {
             ))}
           </div>
         </div>
+
+        
+        {filtroEstado === 'vencida' && (
+          <div className="mx-4 mt-4 flex flex-col gap-3 rounded-xl border border-red-100 bg-red-50/50 p-4 sm:flex-row sm:items-center sm:justify-between md:mx-5">
+
+            <div>
+              <p className="text-sm font-semibold text-gray-900">
+                Filtrar socios caducados
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                {filtroMesVencidas === 'todas'
+                  ? `${membresiasVencidasPeriodo} socio${membresiasVencidasPeriodo === 1 ? '' : 's'} sin renovar en total`
+                  : `${membresiasVencidasPeriodo} socio${membresiasVencidasPeriodo === 1 ? '' : 's'} sin renovar en ${formatearMes(filtroMesVencidas).toLowerCase()}`}
+              </p>
+            </div>
+
+            <select
+              value={filtroMesVencidas}
+              onChange={(e) =>
+                setFiltroMesVencidas(
+                  e.target.value
+                )
+              }
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 outline-none focus:border-black sm:w-auto"
+            >
+              <option value="todas">
+                Todas las caducadas ({membresiasVencidas})
+              </option>
+
+              {mesesDisponiblesVencidas.map(
+                (mes) => (
+                  <option
+                    key={mes}
+                    value={mes}
+                  >
+                    {formatearMes(mes)}
+                    {mes === obtenerMesActual()
+                      ? ' (mes actual)'
+                      : ''}
+                  </option>
+                )
+              )}
+            </select>
+
+          </div>
+        )}
 
         {cargando ? (
           <div className="p-8 text-center text-sm text-gray-500">
@@ -2227,7 +3049,7 @@ export default function MembresiasPage() {
 
                 const nombrePlan = membresia.plan_nombre_snapshot || planActual.nombre || '-'
                 const precioPlan = membresia.plan_precio_snapshot || planActual.precio || 0
-                const duracionPlan = membresia.plan_duracion_dias_snapshot || planActual.duracion_dias || 0
+                const duracionPlan = obtenerTextoDuracionMembresia(membresia)
 
                 return (
                   <div
@@ -2261,7 +3083,7 @@ export default function MembresiasPage() {
                         {nombrePlan}
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        {formatearDinero(precioPlan)} · {duracionPlan} días
+                        {formatearDinero(precioPlan)} · {duracionPlan}
                       </p>
 
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
@@ -2273,9 +3095,13 @@ export default function MembresiasPage() {
                         </div>
 
                         <div>
-                          <p className="text-xs font-semibold text-gray-500">Vence</p>
+                          <p className="text-xs font-semibold text-gray-500">Renueva</p>
                           <p className="font-bold text-gray-900">
-                            {formatearFecha(membresia.fecha_fin)}
+                            {formatearFecha(
+                              obtenerFechaRenovacionMembresia(
+                                membresia
+                              )
+                            )}
                           </p>
                         </div>
                       </div>
@@ -2304,6 +3130,20 @@ export default function MembresiasPage() {
                     </div>
 
                     <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      {membresia.estado_real === 'vencida' && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            abrirDetalleVencida(
+                              membresia
+                            )
+                          }
+                          className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                        >
+                          Ver
+                        </button>
+                      )}
+
                       {puedeAmpliarFidelizacion(membresia) && (
                         <button
                           onClick={() => abrirUpgradeFidelizacion(membresia)}
@@ -2373,7 +3213,7 @@ export default function MembresiasPage() {
                     <th className="px-5 py-3">Miembro</th>
                     <th className="px-5 py-3">Plan histórico</th>
                     <th className="px-5 py-3">Inicio</th>
-                    <th className="px-5 py-3">Vence</th>
+                    <th className="px-5 py-3">Renueva</th>
                     <th className="px-5 py-3">Vigencia</th>
                     <th className="px-5 py-3">Pago</th>
                     <th className="px-5 py-3 text-right">Acciones</th>
@@ -2390,7 +3230,7 @@ export default function MembresiasPage() {
 
                     const nombrePlan = membresia.plan_nombre_snapshot || planActual.nombre || '-'
                     const precioPlan = membresia.plan_precio_snapshot || planActual.precio || 0
-                    const duracionPlan = membresia.plan_duracion_dias_snapshot || planActual.duracion_dias || 0
+                    const duracionPlan = obtenerTextoDuracionMembresia(membresia)
 
                     return (
                       <tr key={membresia.id} className="hover:bg-gray-50">
@@ -2408,7 +3248,7 @@ export default function MembresiasPage() {
                             {nombrePlan}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {formatearDinero(precioPlan)} · {duracionPlan} días
+                            {formatearDinero(precioPlan)} · {duracionPlan}
                           </div>
                         </td>
 
@@ -2420,7 +3260,11 @@ export default function MembresiasPage() {
                         </td>
 
                         <td className="px-5 py-4 text-gray-700">
-                          {formatearFecha(membresia.fecha_fin)}
+                          {formatearFecha(
+                            obtenerFechaRenovacionMembresia(
+                              membresia
+                            )
+                          )}
                         </td>
 
                         <td className="px-5 py-4">
@@ -2454,6 +3298,20 @@ export default function MembresiasPage() {
 
                         <td className="px-5 py-4">
                           <div className="flex justify-end gap-2">
+                            {membresia.estado_real === 'vencida' && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  abrirDetalleVencida(
+                                    membresia
+                                  )
+                                }
+                                className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
+                              >
+                                Ver
+                              </button>
+                            )}
+
                             {puedeAmpliarFidelizacion(membresia) && (
                               <button
                                 onClick={() => abrirUpgradeFidelizacion(membresia)}

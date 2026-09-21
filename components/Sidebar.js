@@ -23,66 +23,68 @@ import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
 
+// MAK_PERMISOS_EMPLEADOS_ESTABLE_V3
+
 const navBase = [
   {
     href: '/dashboard',
     icon: LayoutDashboard,
     label: 'Dashboard',
-    roles: ['dueno', 'empleado'],
+    roles: ['dueno', 'administrador'],
   },
   {
     href: '/miembros',
     icon: Users,
     label: 'Miembros',
-    roles: ['dueno', 'empleado'],
+    roles: ['dueno', 'administrador', 'empleado'],
   },
   {
     href: '/membresias',
     icon: CreditCard,
     label: 'Membresías',
-    roles: ['dueno', 'empleado'],
+    roles: ['dueno', 'administrador'],
   },
   {
     href: '/asistencia',
     icon: ClipboardCheck,
     label: 'Asistencia',
-    roles: ['dueno', 'empleado'],
+    roles: ['dueno', 'administrador', 'empleado'],
   },
   {
     href: '/clases',
     icon: Calendar,
     label: 'Clases',
-    roles: ['dueno'],
+    roles: ['dueno', 'administrador'],
   },
   {
     href: '/inventario',
     icon: Package,
     label: 'Inventario',
-    roles: ['dueno', 'empleado'],
+    roles: ['dueno', 'administrador', 'empleado'],
   },
   {
     href: '/caja',
     icon: DollarSign,
     label: 'Caja',
-    roles: ['dueno'],
+    roles: ['dueno', 'administrador'],
   },
   {
     href: '/reportes',
     icon: BarChart3,
     label: 'Reportes',
-    roles: ['dueno'],
+    roles: ['dueno', 'administrador'],
   },
   {
     href: '/usuarios',
     icon: UserCog,
     label: 'Usuarios',
-    roles: ['dueno'],
+    roles: ['dueno', 'administrador'],
   },
   {
     href: '/auditoria',
     icon: ShieldCheck,
     label: 'Auditoría',
-    roles: ['dueno'],
+    roles: ['dueno', 'administrador'],
   },
 ]
 
@@ -138,7 +140,7 @@ export default function Sidebar({ perfil }) {
             {perfil?.nombre}
           </p>
           <p className="text-xs text-gray-500">
-            {perfil?.rol === 'dueno' ? 'Administrador' : 'Empleado'}
+            {['dueno', 'administrador'].includes(perfil?.rol) ? 'Administrador' : 'Empleado'}
           </p>
         </div>
 
@@ -235,4 +237,4 @@ export default function Sidebar({ perfil }) {
       )}
     </>
   )
-}
+} 
