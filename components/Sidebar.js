@@ -42,7 +42,7 @@ const navBase = [
     href: '/membresias',
     icon: CreditCard,
     label: 'Membresías',
-    roles: ['dueno', 'administrador'],
+    roles: ['dueno', 'administrador', 'empleado'],
   },
   {
     href: '/asistencia',

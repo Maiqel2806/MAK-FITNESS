@@ -14,6 +14,7 @@ const rutasPublicas = ['/login']
 
 const rutasEmpleado = [
   '/miembros',
+  '/membresias',
   '/asistencia',
   '/inventario',
 ]

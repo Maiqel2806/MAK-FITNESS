@@ -764,6 +764,7 @@ export default function MembresiasPage() {
 
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('activa')
+  const [paginaMembresias, setPaginaMembresias] = useState(1)
   
   const [filtroMesVencidas, setFiltroMesVencidas] = useState(
     obtenerMesActual()
@@ -1824,6 +1825,57 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
     ultimaMembresiaVencidaPorSocio,
   ])
 
+  // MAK_MEMBRESIAS_PAGINACION_PRECIO_V1
+  const membresiasOrdenadas = useMemo(() => {
+    const listado = [...membresiasFiltradas]
+
+    if (filtroEstado === 'activa') {
+      listado.sort((a, b) => {
+        const precioA = Number(a.plan_precio_snapshot || a.planes?.precio || 0)
+        const precioB = Number(b.plan_precio_snapshot || b.planes?.precio || 0)
+        const diferencia = precioB - precioA
+
+        if (diferencia !== 0) return diferencia
+
+        const nombreA = `${a.miembros?.nombre || ''} ${a.miembros?.apellido || ''}`
+        const nombreB = `${b.miembros?.nombre || ''} ${b.miembros?.apellido || ''}`
+
+        return nombreA.localeCompare(nombreB, 'es')
+      })
+    }
+
+    return listado
+  }, [membresiasFiltradas, filtroEstado])
+
+  const totalPaginasMembresias = Math.max(
+    1,
+    Math.ceil(membresiasOrdenadas.length / 10)
+  )
+
+  const paginaMembresiasVisible = Math.min(
+    paginaMembresias,
+    totalPaginasMembresias
+  )
+
+  const membresiasPaginadas = useMemo(() => {
+    const inicio = (paginaMembresiasVisible - 1) * 10
+
+    return membresiasOrdenadas.slice(inicio, inicio + 10)
+  }, [membresiasOrdenadas, paginaMembresiasVisible])
+
+  const paginasVisiblesMembresias = Array.from(
+    { length: totalPaginasMembresias },
+    (_, indice) => indice + 1
+  ).filter((pagina) =>
+    pagina === 1 ||
+    pagina === totalPaginasMembresias ||
+    Math.abs(pagina - paginaMembresiasVisible) <= 1
+  )
+
+  useEffect(() => {
+    setPaginaMembresias(1)
+  }, [filtroEstado, busqueda, filtroMesVencidas])
+
   const miembrosActivos = miembros.filter(
     (miembro) => miembro.estado === 'activo'
   )
@@ -2161,6 +2213,8 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
         </div>
       )}
 
+      {/* MAK_RESUMEN_MEMBRESIAS_SOLO_ADMIN */}
+      {perfil?.rol !== 'empleado' && (
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-6 md:gap-4">
         <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
           <p className="text-xs text-gray-500 md:text-sm">Vigentes</p>
@@ -2204,6 +2258,7 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
           </h2>
         </div>
       </div>
+      )}
 
       {esDueno && mostrarPlan && (
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
@@ -3040,7 +3095,7 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
-              {membresiasFiltradas.map((membresia) => {
+              {membresiasPaginadas.map((membresia) => {
                 const pagosMembresia = obtenerPagosMembresia(membresia.id)
                 const ultimoPago = obtenerUltimoPagoMembresia(membresia.id)
                 const totalPagado = obtenerTotalPagadoMembresia(membresia.id)
@@ -3221,7 +3276,7 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
-                  {membresiasFiltradas.map((membresia) => {
+                  {membresiasPaginadas.map((membresia) => {
                     const pagosMembresia = obtenerPagosMembresia(membresia.id)
                     const ultimoPago = obtenerUltimoPagoMembresia(membresia.id)
                     const totalPagado = obtenerTotalPagadoMembresia(membresia.id)
@@ -3374,6 +3429,92 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
                   })}
                 </tbody>
               </table>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-5">
+              <p className="text-sm text-gray-600">
+                Mostrando <span className="font-semibold">{(paginaMembresiasVisible - 1) * 10 + 1}</span>
+                {' - '}
+                <span className="font-semibold">{Math.min(paginaMembresiasVisible * 10, membresiasOrdenadas.length)}</span>
+                {' de '}
+                <span className="font-semibold">{membresiasOrdenadas.length}</span> membresías
+
+                {filtroEstado === 'activa' && (
+                  <span className="ml-2 text-xs text-gray-500">
+                    · Mayor precio primero
+                  </span>
+                )}
+              </p>
+
+              {totalPaginasMembresias > 1 && (
+                <nav
+                  aria-label="Páginas de membresías"
+                  className="flex flex-wrap items-center gap-1.5"
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPaginaMembresias(
+                        Math.max(1, paginaMembresiasVisible - 1)
+                      )
+                    }
+                    disabled={paginaMembresiasVisible === 1}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+
+                  {paginasVisiblesMembresias.map((pagina, indice) => (
+                    <span
+                      key={pagina}
+                      className="inline-flex items-center gap-1.5"
+                    >
+                      {indice > 0 &&
+                        pagina - paginasVisiblesMembresias[indice - 1] > 1 && (
+                          <span className="px-1 text-sm text-gray-400">
+                            …
+                          </span>
+                        )}
+
+                      <button
+                        type="button"
+                        onClick={() => setPaginaMembresias(pagina)}
+                        aria-label={`Ir a la página ${pagina}`}
+                        aria-current={
+                          pagina === paginaMembresiasVisible
+                            ? 'page'
+                            : undefined
+                        }
+                        className={`min-w-9 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                          pagina === paginaMembresiasVisible
+                            ? 'border-black bg-black text-white'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pagina}
+                      </button>
+                    </span>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPaginaMembresias(
+                        Math.min(
+                          totalPaginasMembresias,
+                          paginaMembresiasVisible + 1
+                        )
+                      )
+                    }
+                    disabled={
+                      paginaMembresiasVisible === totalPaginasMembresias
+                    }
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Siguiente
+                  </button>
+                </nav>
+              )}
             </div>
           </>
         )}
