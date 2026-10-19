@@ -95,17 +95,315 @@ function obtenerFechaHoy() {
   return `${year}-${month}-${day}`
 }
 
+// MAK_PAGOS_SEGUROS_V1
+function crearIdOperacion() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID()
+  }
+
+  const plantilla = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+  return plantilla.replace(/[xy]/g, (caracter) => {
+    const aleatorio = Math.floor(Math.random() * 16)
+    const valor = caracter === 'x' ? aleatorio : (aleatorio & 0x3) | 0x8
+    return valor.toString(16)
+  })
+}
+
+function crearPagoMembresia(monto = '') {
+  return {
+    metodo_pago: 'efectivo',
+    monto: String(monto ?? ''),
+    notas: '',
+    numero_comprobante: '',
+    banco_origen: '',
+    tipo_tarjeta: '',
+  }
+}
+
+function ajustarPagoMembresiaPorMetodo(pago, campo, valor) {
+  const nuevo = {
+    ...pago,
+    [campo]: valor,
+  }
+
+  if (campo !== 'metodo_pago') return nuevo
+
+  if (valor === 'efectivo' || valor === 'canje') {
+    nuevo.numero_comprobante = ''
+    nuevo.banco_origen = ''
+    nuevo.tipo_tarjeta = ''
+  }
+
+  if (valor === 'transferencia') {
+    nuevo.tipo_tarjeta = ''
+  }
+
+  if (valor === 'tarjeta') {
+    nuevo.banco_origen = ''
+  }
+
+  return nuevo
+}
+
+function obtenerTotalPagosFormulario(pagos) {
+  return (pagos || []).reduce(
+    (total, pago) => total + Number(pago?.monto || 0),
+    0
+  )
+}
+
+function validarPagosMembresia(pagos, precioPlan, permitirCanje) {
+  if (!Array.isArray(pagos) || pagos.length === 0) {
+    return 'Debes registrar al menos una forma de pago.'
+  }
+
+  if (pagos.length > 5) {
+    return 'No se permiten más de 5 formas de pago en una operación.'
+  }
+
+  for (let indice = 0; indice < pagos.length; indice += 1) {
+    const pago = pagos[indice] || {}
+    const numero = indice + 1
+    const monto = Number(pago.monto)
+
+    if (!monto || monto <= 0) {
+      return `El monto de la forma de pago ${numero} debe ser mayor a 0.`
+    }
+
+    if (!['efectivo', 'transferencia', 'tarjeta', 'canje'].includes(pago.metodo_pago)) {
+      return `La forma de pago ${numero} no es válida.`
+    }
+
+    if (pago.metodo_pago === 'canje') {
+      if (!permitirCanje) {
+        return 'Los canjes solo pueden ser registrados por dueño o administrador.'
+      }
+
+      if (!String(pago.notas || '').trim()) {
+        return `Describe el motivo del canje en la forma de pago ${numero}.`
+      }
+    }
+
+    if (pago.metodo_pago === 'transferencia') {
+      if (!String(pago.numero_comprobante || '').trim()) {
+        return `Ingresa el comprobante de la transferencia ${numero}.`
+      }
+
+      if (!String(pago.banco_origen || '').trim()) {
+        return `Ingresa el banco de origen de la transferencia ${numero}.`
+      }
+    }
+
+    if (pago.metodo_pago === 'tarjeta') {
+      if (!String(pago.numero_comprobante || '').trim()) {
+        return `Ingresa el comprobante del pago con tarjeta ${numero}.`
+      }
+
+      if (!pago.tipo_tarjeta) {
+        return `Selecciona el tipo de tarjeta de la forma de pago ${numero}.`
+      }
+    }
+  }
+
+  const total = obtenerTotalPagosFormulario(pagos)
+  const precio = Number(precioPlan || 0)
+
+  if (precio > 0 && Math.round(total * 100) < Math.round(precio * 100)) {
+    return `Pago incompleto. Registrado: $${total.toFixed(2)}. Valor del plan: $${precio.toFixed(2)}.`
+  }
+
+  return ''
+}
+
+function PagosMembresiaEditor({
+  pagos,
+  actualizarPago,
+  agregarPago,
+  eliminarPago,
+  permitirCanje,
+  precioPlan,
+}) {
+  const total = obtenerTotalPagosFormulario(pagos)
+  const precio = Number(precioPlan || 0)
+  const diferencia = precio - total
+
+  return (
+    <div className="space-y-3">
+      {(pagos || []).map((pago, indice) => (
+        <div
+          key={indice}
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-4"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-sm font-bold text-gray-900">
+              Forma de pago {indice + 1}
+            </p>
+
+            {pagos.length > 1 && (
+              <button
+                type="button"
+                onClick={() => eliminarPago(indice)}
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+              >
+                Quitar
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Monto
+              </label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={pago.monto}
+                onChange={(e) => actualizarPago(indice, 'monto', e.target.value)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                placeholder="0.00"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Método
+              </label>
+              <select
+                value={pago.metodo_pago}
+                onChange={(e) => actualizarPago(indice, 'metodo_pago', e.target.value)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+              >
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="tarjeta">Tarjeta</option>
+                {permitirCanje && <option value="canje">Canje</option>}
+              </select>
+            </div>
+
+            {pago.metodo_pago === 'transferencia' && (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Número de comprobante
+                  </label>
+                  <input
+                    value={pago.numero_comprobante}
+                    onChange={(e) => actualizarPago(indice, 'numero_comprobante', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Ej: TRX-001234"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Banco de origen
+                  </label>
+                  <input
+                    value={pago.banco_origen}
+                    onChange={(e) => actualizarPago(indice, 'banco_origen', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Ej: Banco Pichincha"
+                  />
+                </div>
+              </>
+            )}
+
+            {pago.metodo_pago === 'tarjeta' && (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Tipo de tarjeta
+                  </label>
+                  <select
+                    value={pago.tipo_tarjeta}
+                    onChange={(e) => actualizarPago(indice, 'tipo_tarjeta', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                  >
+                    <option value="">Seleccionar tarjeta</option>
+                    {tiposTarjeta.map((tarjeta) => (
+                      <option key={tarjeta.value} value={tarjeta.value}>
+                        {tarjeta.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Número de comprobante
+                  </label>
+                  <input
+                    value={pago.numero_comprobante}
+                    onChange={(e) => actualizarPago(indice, 'numero_comprobante', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Ej: POS-001234"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                {pago.metodo_pago === 'canje' ? 'Detalle del canje *' : 'Detalle de este pago'}
+              </label>
+              <textarea
+                value={pago.notas}
+                onChange={(e) => actualizarPago(indice, 'notas', e.target.value)}
+                className="min-h-20 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                placeholder={
+                  pago.metodo_pago === 'canje'
+                    ? 'Ej: Canje por servicio de bailoterapia'
+                    : 'Opcional'
+                }
+              />
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm">
+          <p className="font-bold text-gray-900">
+            Total registrado: ${total.toFixed(2)}
+          </p>
+          {precio > 0 && (
+            <p className={diferencia > 0.004 ? 'text-red-600' : 'text-green-700'}>
+              Valor del plan: ${precio.toFixed(2)}
+              {diferencia > 0.004
+                ? ` · Faltan $${diferencia.toFixed(2)}`
+                : diferencia < -0.004
+                  ? ` · Excede $${Math.abs(diferencia).toFixed(2)}`
+                  : ' · Pago exacto'}
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={agregarPago}
+          disabled={(pagos || []).length >= 5}
+          className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          + Agregar otro método
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function crearMembresiaInicial() {
   return {
     plan_id: '',
     fecha_inicio:
       obtenerFechaHoy(),
-    metodo_pago: 'efectivo',
-    monto: '',
     notas: '',
-    numero_comprobante: '',
-    banco_origen: '',
-    tipo_tarjeta: '',
+    operacion_id:
+      crearIdOperacion(),
+    pagos: [
+      crearPagoMembresia(),
+    ],
   }
 }
 
@@ -470,6 +768,13 @@ export default function MiembrosPage() {
 function MiembrosContenido({ perfil }) {
   const esEmpleado = perfil?.rol === 'empleado'
 
+  // MAK_COMUNICADOS_WHATSAPP_V1
+  const puedeAdministrarComunicado =
+    ['dueno', 'administrador'].includes(
+      perfil?.rol
+    )
+  const esAdminPagos = ['dueno', 'administrador'].includes(perfil?.rol)
+
   // MAK_PERMISOS_EMPLEADOS_ESTABLE_V3
   const [
     miembros,
@@ -570,6 +875,29 @@ function MiembrosContenido({ perfil }) {
     setErrorDetalle,
   ] = useState('')
 
+  const [
+    mostrarComunicado,
+    setMostrarComunicado,
+  ] = useState(false)
+
+  const [
+    formComunicado,
+    setFormComunicado,
+  ] = useState({
+    titulo: '',
+    mensaje: '',
+  })
+
+  const [
+    cargandoComunicado,
+    setCargandoComunicado,
+  ] = useState(false)
+
+  const [
+    guardandoComunicado,
+    setGuardandoComunicado,
+  ] = useState(false)
+
   useEffect(() => {
     cargarDatos()
   }, [])
@@ -603,11 +931,15 @@ function MiembrosContenido({ perfil }) {
           nombre,
           precio,
           duracion_dias,
+          duracion_meses,
           activo,
           es_upgrade,
           codigo,
           cobra_inscripcion,
-          es_promocion
+          es_promocion,
+          modalidad_vigencia,
+          vigencia_desde,
+          vigencia_hasta
         `)
         .eq('activo', true)
         .order(
@@ -689,49 +1021,105 @@ function MiembrosContenido({ perfil }) {
                 valor
             )
 
-          nuevo.monto = plan
-            ? String(
-                plan.precio
-              )
-            : ''
-        }
-
-        if (
-          campo ===
-          'metodo_pago'
-        ) {
-          if (
-            valor ===
-            'efectivo'
-          ) {
-            nuevo.numero_comprobante =
-              ''
-
-            nuevo.banco_origen =
-              ''
-
-            nuevo.tipo_tarjeta =
-              ''
-          }
+          const pagosActuales =
+            Array.isArray(
+              actual.pagos
+            ) &&
+            actual.pagos.length > 0
+              ? actual.pagos.map(
+                  (pago) => ({
+                    ...pago,
+                  })
+                )
+              : [
+                  crearPagoMembresia(),
+                ]
 
           if (
-            valor ===
-            'transferencia'
+            pagosActuales.length === 1
           ) {
-            nuevo.tipo_tarjeta =
-              ''
+            pagosActuales[0].monto =
+              plan
+                ? String(
+                    plan.precio
+                  )
+                : ''
           }
 
-          if (
-            valor ===
-            'tarjeta'
-          ) {
-            nuevo.banco_origen =
-              ''
-          }
+          nuevo.pagos =
+            pagosActuales
         }
 
         return nuevo
+      }
+    )
+  }
+
+  function actualizarPagoMembresia(
+    indice,
+    campo,
+    valor
+  ) {
+    setFormMembresia(
+      (actual) => ({
+        ...actual,
+        pagos:
+          actual.pagos.map(
+            (
+              pago,
+              posicion
+            ) =>
+              posicion === indice
+                ? ajustarPagoMembresiaPorMetodo(
+                    pago,
+                    campo,
+                    valor
+                  )
+                : pago
+          ),
+      })
+    )
+  }
+
+  function agregarPagoMembresia() {
+    setFormMembresia(
+      (actual) => {
+        if (
+          actual.pagos.length >= 5
+        ) {
+          return actual
+        }
+
+        return {
+          ...actual,
+          pagos: [
+            ...actual.pagos,
+            crearPagoMembresia(),
+          ],
+        }
+      }
+    )
+  }
+
+  function eliminarPagoMembresia(
+    indice
+  ) {
+    setFormMembresia(
+      (actual) => {
+        if (
+          actual.pagos.length <= 1
+        ) {
+          return actual
+        }
+
+        return {
+          ...actual,
+          pagos:
+            actual.pagos.filter(
+              (_, posicion) =>
+                posicion !== indice
+            ),
+        }
       }
     )
   }
@@ -1047,35 +1435,71 @@ function MiembrosContenido({ perfil }) {
       )
     }
 
-    const monto =
-      Number(
-        formMembresia.monto
+    const errorPagos =
+      validarPagosMembresia(
+        formMembresia.pagos,
+        plan.precio,
+        esAdminPagos
       )
+
+    if (errorPagos) {
+      throw new Error(
+        errorPagos
+      )
+    }
+
+    const operacionId =
+      formMembresia.operacion_id ||
+      crearIdOperacion()
 
     if (
-      !monto ||
-      monto <= 0
+      !formMembresia.operacion_id
     ) {
-      throw new Error(
-        'El monto del pago debe ser mayor a 0.'
+      setFormMembresia(
+        (actual) => ({
+          ...actual,
+          operacion_id:
+            operacionId,
+        })
       )
     }
 
-    const errorPago =
-      validarDetallePago(
-        formMembresia
-      )
+    const pagosOperacion =
+      formMembresia.pagos.map(
+        (pago) => ({
+          metodo_pago:
+            pago.metodo_pago,
 
-    if (errorPago) {
-      throw new Error(
-        errorPago
+          monto:
+            Number(
+              pago.monto
+            ),
+
+          notas:
+            String(
+              pago.notas || ''
+            ).trim() || null,
+
+          numero_comprobante:
+            String(
+              pago.numero_comprobante || ''
+            ).trim() || null,
+
+          banco_origen:
+            String(
+              pago.banco_origen || ''
+            ).trim() || null,
+
+          tipo_tarjeta:
+            pago.tipo_tarjeta ||
+            null,
+        })
       )
-    }
 
     const {
       error,
     } = await supabase.rpc(
-      'registrar_membresia_inteligente',
+      'registrar_membresia_con_pagos',
       {
         p_miembro_id:
           miembroId,
@@ -1083,15 +1507,8 @@ function MiembrosContenido({ perfil }) {
         p_plan_id:
           formMembresia.plan_id,
 
-        p_metodo_pago:
-          formMembresia.metodo_pago,
-
-        p_monto:
-          monto,
-
-        p_notas:
-          formMembresia.notas.trim() ||
-          null,
+        p_pagos:
+          pagosOperacion,
 
         p_fecha_inicio_manual:
           formMembresia.fecha_inicio,
@@ -1099,17 +1516,12 @@ function MiembrosContenido({ perfil }) {
         p_renovacion_de_membresia_id:
           null,
 
-        p_numero_comprobante:
-          formMembresia.numero_comprobante.trim() ||
+        p_notas:
+          formMembresia.notas.trim() ||
           null,
 
-        p_banco_origen:
-          formMembresia.banco_origen.trim() ||
-          null,
-
-        p_tipo_tarjeta:
-          formMembresia.tipo_tarjeta ||
-          null,
+        p_operacion_id:
+          operacionId,
       }
     )
 
@@ -1185,8 +1597,7 @@ function MiembrosContenido({ perfil }) {
     }
 
     if (
-      !editandoId &&
-      !nuevoMiembroPendienteId
+      !editandoId
     ) {
       const plan =
         planes.find(
@@ -1199,7 +1610,6 @@ function MiembrosContenido({ perfil }) {
         setError(
           'Debes seleccionar una membresía para el nuevo socio.'
         )
-
         setGuardando(false)
         return
       }
@@ -1210,38 +1620,19 @@ function MiembrosContenido({ perfil }) {
         setError(
           'La fecha de inicio de la membresía es obligatoria.'
         )
-
         setGuardando(false)
         return
       }
 
-      const monto =
-        Number(
-          formMembresia.monto
+      const errorPagos =
+        validarPagosMembresia(
+          formMembresia.pagos,
+          plan.precio,
+          esAdminPagos
         )
 
-      if (
-        !monto ||
-        monto <= 0
-      ) {
-        setError(
-          'El monto del pago debe ser mayor a 0.'
-        )
-
-        setGuardando(false)
-        return
-      }
-
-      const errorPago =
-        validarDetallePago(
-          formMembresia
-        )
-
-      if (errorPago) {
-        setError(
-          errorPago
-        )
-
+      if (errorPagos) {
+        setError(errorPagos)
         setGuardando(false)
         return
       }
@@ -1450,6 +1841,254 @@ function MiembrosContenido({ perfil }) {
     )
   }
 
+  async function abrirFormularioComunicado() {
+    if (!puedeAdministrarComunicado) {
+      window.alert(
+        'No tienes permisos para administrar comunicados.'
+      )
+      return
+    }
+
+    setCargandoComunicado(true)
+    setError('')
+    setMensaje('')
+
+    try {
+      const {
+        data,
+        error: errorComunicado,
+      } = await supabase.rpc(
+        'obtener_comunicado_actual'
+      )
+
+      if (errorComunicado) {
+        throw new Error(
+          errorComunicado.message
+        )
+      }
+
+      const comunicado =
+        Array.isArray(data)
+          ? data[0]
+          : data
+
+      setFormComunicado({
+        titulo:
+          comunicado?.titulo ||
+          '',
+
+        mensaje:
+          comunicado?.mensaje ||
+          '',
+      })
+
+      setMostrarComunicado(true)
+
+    } catch (errorComunicado) {
+
+      setError(
+        errorComunicado.message
+      )
+
+    } finally {
+
+      setCargandoComunicado(false)
+    }
+  }
+
+  function cerrarFormularioComunicado() {
+    setMostrarComunicado(false)
+
+    setFormComunicado({
+      titulo: '',
+      mensaje: '',
+    })
+  }
+
+  async function guardarComunicado(
+    evento
+  ) {
+    evento.preventDefault()
+
+    if (!puedeAdministrarComunicado) {
+      return
+    }
+
+    const titulo =
+      formComunicado.titulo.trim()
+
+    const cuerpo =
+      formComunicado.mensaje.trim()
+
+    if (!titulo) {
+      setError(
+        'El título del comunicado es obligatorio.'
+      )
+      return
+    }
+
+    if (!cuerpo) {
+      setError(
+        'El cuerpo del comunicado es obligatorio.'
+      )
+      return
+    }
+
+    setGuardandoComunicado(true)
+    setError('')
+    setMensaje('')
+
+    try {
+      const {
+        error: errorGuardar,
+      } = await supabase.rpc(
+        'guardar_comunicado_actual',
+        {
+          p_titulo:
+            titulo,
+
+          p_mensaje:
+            cuerpo,
+        }
+      )
+
+      if (errorGuardar) {
+        throw new Error(
+          errorGuardar.message
+        )
+      }
+
+      cerrarFormularioComunicado()
+
+      setMensaje(
+        'Comunicado guardado y habilitado para envío.'
+      )
+
+    } catch (errorGuardar) {
+
+      setError(
+        errorGuardar.message
+      )
+
+    } finally {
+
+      setGuardandoComunicado(false)
+    }
+  }
+
+  async function desactivarComunicado() {
+    if (!puedeAdministrarComunicado) {
+      return
+    }
+
+    const confirmar =
+      window.confirm(
+        '¿Deseas desactivar el comunicado actual? El botón de envío dejará de tener un mensaje disponible.'
+      )
+
+    if (!confirmar) {
+      return
+    }
+
+    setGuardandoComunicado(true)
+    setError('')
+    setMensaje('')
+
+    try {
+      const {
+        error: errorDesactivar,
+      } = await supabase.rpc(
+        'desactivar_comunicado_actual'
+      )
+
+      if (errorDesactivar) {
+        throw new Error(
+          errorDesactivar.message
+        )
+      }
+
+      cerrarFormularioComunicado()
+
+      setMensaje(
+        'Comunicado desactivado correctamente.'
+      )
+
+    } catch (errorDesactivar) {
+
+      setError(
+        errorDesactivar.message
+      )
+
+    } finally {
+
+      setGuardandoComunicado(false)
+    }
+  }
+
+  async function enviarComunicadoWhatsApp() {
+    if (!detalleMiembro) {
+      return
+    }
+
+    const telefono =
+      normalizarTelefonoWhatsAppDetalle(
+        detalleMiembro.telefono
+      )
+
+    if (!telefono) {
+      window.alert(
+        'El socio no tiene un número de WhatsApp válido.'
+      )
+      return
+    }
+
+    try {
+      const {
+        data,
+        error: errorComunicado,
+      } = await supabase.rpc(
+        'obtener_comunicado_actual'
+      )
+
+      if (errorComunicado) {
+        throw new Error(
+          errorComunicado.message
+        )
+      }
+
+      const comunicado =
+        Array.isArray(data)
+          ? data[0]
+          : data
+
+      if (
+        !comunicado?.titulo ||
+        !comunicado?.mensaje
+      ) {
+        window.alert(
+          'No existe un comunicado activo. Crea o habilita un comunicado antes de enviarlo.'
+        )
+        return
+      }
+
+      const mensajeComunicado =
+        `*${comunicado.titulo.trim()}*\n\n` +
+        `${comunicado.mensaje.trim()}\n\n` +
+        'No te olvides de seguir nuestra página oficial en Instagram @makfitness0'
+
+      abrirWhatsAppDetalle(
+        detalleMiembro.telefono,
+        mensajeComunicado
+      )
+
+    } catch (errorComunicado) {
+
+      window.alert(
+        errorComunicado.message
+      )
+    }
+  }
+
   async function abrirDetalleMiembro(miembro) {
     setDetalleMiembro(miembro)
     setDetalleMembresia(null)
@@ -1465,6 +2104,9 @@ function MiembrosContenido({ perfil }) {
         estado,
         plan_nombre_snapshot,
         plan_precio_snapshot,
+        plan_modalidad_vigencia_snapshot,
+        plan_vigencia_desde_snapshot,
+        plan_vigencia_hasta_snapshot,
         created_at
       `)
       .eq('miembro_id', miembro.id)
@@ -1502,16 +2144,31 @@ function MiembrosContenido({ perfil }) {
     setCargandoDetalle(false)
   }
 
+  // MAK_DETALLE_PROMO_FECHA_FIJA_V1
+  function esPromoFechaFijaDetalle(
+    membresia
+  ) {
+    return (
+      membresia
+        ?.plan_modalidad_vigencia_snapshot ===
+      'fecha_fija'
+    )
+  }
+
   function enviarDetallePorWhatsApp() {
     if (!detalleMiembro || !detalleMembresia) {
       return
     }
 
     const fechaRenovacion =
-      sumarDiasDetalle(
-        detalleMembresia.fecha_fin,
-        1
+      esPromoFechaFijaDetalle(
+        detalleMembresia
       )
+        ? detalleMembresia.fecha_fin
+        : sumarDiasDetalle(
+            detalleMembresia.fecha_fin,
+            1
+          )
 
     const mensajeWhatsApp =
       crearMensajeWhatsAppDetalle({
@@ -1533,6 +2190,105 @@ function MiembrosContenido({ perfil }) {
     )
   }
 
+  // MAK_PROMOS_FECHA_FIJA_MIEMBROS_V1
+  function obtenerFechaHoyGuayaquilMiembros() {
+    const partes =
+      new Intl.DateTimeFormat(
+        'en-US',
+        {
+          timeZone:
+            'America/Guayaquil',
+
+          year:
+            'numeric',
+
+          month:
+            '2-digit',
+
+          day:
+            '2-digit',
+        }
+      ).formatToParts(
+        new Date()
+      )
+
+    const valores =
+      Object.fromEntries(
+        partes.map(
+          (parte) => [
+            parte.type,
+            parte.value,
+          ]
+        )
+      )
+
+    return `${valores.year}-${valores.month}-${valores.day}`
+  }
+
+  function esPlanFechaFijaMiembros(
+    plan
+  ) {
+    return (
+      Boolean(
+        plan?.es_promocion
+      ) &&
+      plan?.modalidad_vigencia ===
+        'fecha_fija'
+    )
+  }
+
+  function planDisponibleParaVentaMiembros(
+    plan
+  ) {
+    if (!plan?.activo) {
+      return false
+    }
+
+    if (
+      !esPlanFechaFijaMiembros(
+        plan
+      )
+    ) {
+      return true
+    }
+
+    if (
+      !plan.vigencia_desde ||
+      !plan.vigencia_hasta
+    ) {
+      return false
+    }
+
+    const hoy =
+      obtenerFechaHoyGuayaquilMiembros()
+
+    return (
+      hoy >=
+        plan.vigencia_desde &&
+      hoy <=
+        plan.vigencia_hasta
+    )
+  }
+
+  function formatearFechaPlanMiembros(
+    fecha
+  ) {
+    if (!fecha) {
+      return '-'
+    }
+
+    const partes =
+      String(fecha)
+        .slice(0, 10)
+        .split('-')
+
+    if (partes.length !== 3) {
+      return fecha
+    }
+
+    return `${partes[2]}/${partes[1]}/${partes[0]}`
+  }
+
   const planesDisponibles =
     useMemo(() => {
       return planes.filter(
@@ -1541,7 +2297,10 @@ function MiembrosContenido({ perfil }) {
             plan.activo &&
             !plan.es_upgrade &&
             plan.codigo !==
-              'MENSUAL_FIDELIZACION'
+              'MENSUAL_FIDELIZACION' &&
+            planDisponibleParaVentaMiembros(
+              plan
+            )
           )
         }
       )
@@ -1676,16 +2435,37 @@ function MiembrosContenido({ perfil }) {
           </p>
         </div>
 
-        <button
-          onClick={
-            abrirNuevoMiembro
-          }
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800"
-        >
-          <Plus size={18} />
+        <div className="flex flex-col gap-2 sm:flex-row">
 
-          Nuevo miembro
-        </button>
+          {puedeAdministrarComunicado && (
+            <button
+              type="button"
+              onClick={
+                abrirFormularioComunicado
+              }
+              disabled={
+                cargandoComunicado
+              }
+              className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {cargandoComunicado
+                ? 'Cargando...'
+                : 'Crear comunicado'}
+            </button>
+          )}
+
+          <button
+            onClick={
+              abrirNuevoMiembro
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800"
+          >
+            <Plus size={18} />
+
+            Nuevo miembro
+          </button>
+
+        </div>
       </div>
 
       {error && (
@@ -1697,6 +2477,197 @@ function MiembrosContenido({ perfil }) {
       {mensaje && (
         <div className="mt-5 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
           {mensaje}
+        </div>
+      )}
+
+      {mostrarComunicado &&
+        puedeAdministrarComunicado && (
+
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+          onClick={
+            cerrarFormularioComunicado
+          }
+        >
+
+          <div
+            className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+
+            <div className="flex items-start justify-between gap-4">
+
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Crear comunicado
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Este será el único comunicado activo para enviar a los socios.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  cerrarFormularioComunicado
+                }
+                className="rounded-xl p-2 text-gray-500 transition hover:bg-gray-100"
+              >
+                <X size={20} />
+              </button>
+
+            </div>
+
+            <form
+              onSubmit={
+                guardarComunicado
+              }
+              className="mt-5 space-y-4"
+            >
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                  Título del comunicado
+                </label>
+
+                <input
+                  type="text"
+                  value={
+                    formComunicado.titulo
+                  }
+                  onChange={(e) =>
+                    setFormComunicado(
+                      (actual) => ({
+                        ...actual,
+                        titulo:
+                          e.target.value,
+                      })
+                    )
+                  }
+                  maxLength={150}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                  placeholder="Ej: Horario especial por feriado"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                  Cuerpo del mensaje
+                </label>
+
+                <textarea
+                  value={
+                    formComunicado.mensaje
+                  }
+                  onChange={(e) =>
+                    setFormComunicado(
+                      (actual) => ({
+                        ...actual,
+                        mensaje:
+                          e.target.value,
+                      })
+                    )
+                  }
+                  rows={8}
+                  className="w-full resize-y rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                  placeholder="Escribe aquí la información que recibirán todos los socios..."
+                />
+              </div>
+
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Pie automático
+                </p>
+
+                <p className="mt-2 text-sm text-gray-700">
+                  No te olvides de seguir nuestra página oficial en Instagram @makfitness0
+                </p>
+
+              </div>
+
+              {(formComunicado.titulo ||
+                formComunicado.mensaje) && (
+
+                <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+
+                  <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                    Vista previa
+                  </p>
+
+                  <div className="mt-3 whitespace-pre-wrap text-sm text-gray-800">
+
+                    {formComunicado.titulo && (
+                      <p className="font-bold">
+                        {formComunicado.titulo}
+                      </p>
+                    )}
+
+                    {formComunicado.mensaje && (
+                      <p className="mt-3">
+                        {formComunicado.mensaje}
+                      </p>
+                    )}
+
+                    <p className="mt-3">
+                      No te olvides de seguir nuestra página oficial en Instagram @makfitness0
+                    </p>
+
+                  </div>
+
+                </div>
+
+              )}
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+
+                <button
+                  type="submit"
+                  disabled={
+                    guardandoComunicado
+                  }
+                  className="flex-1 rounded-xl bg-black px-4 py-3 text-sm font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {guardandoComunicado
+                    ? 'Guardando...'
+                    : 'Guardar y habilitar'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={
+                    desactivarComunicado
+                  }
+                  disabled={
+                    guardandoComunicado
+                  }
+                  className="rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Desactivar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={
+                    cerrarFormularioComunicado
+                  }
+                  disabled={
+                    guardandoComunicado
+                  }
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
+
         </div>
       )}
 
@@ -1776,15 +2747,26 @@ function MiembrosContenido({ perfil }) {
 
                   <div>
                     <p className="text-xs text-gray-500">
-                      Próxima renovación
+                      {esPromoFechaFijaDetalle(
+                        detalleMembresia
+                      )
+                        ? 'Fin de vigencia'
+                        : 'Próxima renovación'}
                     </p>
+
                     <p className="mt-1 font-semibold text-gray-900">
+
                       {formatearFechaDetalle(
-                        sumarDiasDetalle(
-                          detalleMembresia.fecha_fin,
-                          1
+                        esPromoFechaFijaDetalle(
+                          detalleMembresia
                         )
+                          ? detalleMembresia.fecha_fin
+                          : sumarDiasDetalle(
+                              detalleMembresia.fecha_fin,
+                              1
+                            )
                       )}
+
                     </p>
                   </div>
                 </div>
@@ -1798,10 +2780,13 @@ function MiembrosContenido({ perfil }) {
               </div>
             ) : null}
 
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+
               <button
                 type="button"
-                onClick={enviarDetallePorWhatsApp}
+                onClick={
+                  enviarDetallePorWhatsApp
+                }
                 disabled={
                   cargandoDetalle ||
                   !detalleMembresia ||
@@ -1809,18 +2794,37 @@ function MiembrosContenido({ perfil }) {
                     detalleMiembro.telefono
                   )
                 }
-                className="flex-1 rounded-xl bg-green-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-green-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Enviar detalles por WhatsApp
               </button>
 
               <button
                 type="button"
-                onClick={cerrarDetalleMiembro}
-                className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                onClick={
+                  enviarComunicadoWhatsApp
+                }
+                disabled={
+                  cargandoDetalle ||
+                  !normalizarTelefonoWhatsAppDetalle(
+                    detalleMiembro.telefono
+                  )
+                }
+                className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Enviar comunicado
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  cerrarDetalleMiembro
+                }
+                className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 sm:col-span-2"
               >
                 Cerrar
               </button>
+
             </div>
           </div>
         </div>
@@ -2268,6 +3272,17 @@ function MiembrosContenido({ perfil }) {
                               {formatearDinero(
                                 plan.precio
                               )}
+
+                              {esPlanFechaFijaMiembros(
+                                plan
+                              ) && (
+                                <>
+                                  {' · hasta '}
+                                  {formatearFechaPlanMiembros(
+                                    plan.vigencia_hasta
+                                  )}
+                                </>
+                              )}
                             </option>
                           )
                         )}
@@ -2292,6 +3307,25 @@ function MiembrosContenido({ perfil }) {
                           value={
                             formMembresia.fecha_inicio
                           }
+
+                          min={
+                            esPlanFechaFijaMiembros(
+                              planSeleccionado
+                            )
+                              ? planSeleccionado
+                                  .vigencia_desde
+                              : undefined
+                          }
+
+                          max={
+                            esPlanFechaFijaMiembros(
+                              planSeleccionado
+                            )
+                              ? planSeleccionado
+                                  .vigencia_hasta
+                              : undefined
+                          }
+
                           onChange={(
                             e
                           ) =>
@@ -2302,215 +3336,52 @@ function MiembrosContenido({ perfil }) {
                                 .value
                             )
                           }
+
                           className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-4 text-sm outline-none focus:border-black"
                         />
+
+                        {esPlanFechaFijaMiembros(
+                          planSeleccionado
+                        ) && (
+
+                          <p className="mt-1 text-xs font-semibold text-purple-700">
+                            Esta promoción finaliza el{' '}
+                            {formatearFechaPlanMiembros(
+                              planSeleccionado
+                                .vigencia_hasta
+                            )}.
+                          </p>
+
+                        )}
                       </div>
                     </div>
 
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Monto
+                    <div className="md:col-span-2">
+                      <label className="mb-2 block text-sm font-bold text-gray-900">
+                        Formas de pago
                       </label>
 
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={
-                          formMembresia.monto
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          actualizarMembresia(
-                            'monto',
-                            e.target
-                              .value
-                          )
-                        }
-                        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
-                        placeholder="0.00"
+                      <PagosMembresiaEditor
+                        pagos={formMembresia.pagos}
+                        actualizarPago={actualizarPagoMembresia}
+                        agregarPago={agregarPagoMembresia}
+                        eliminarPago={eliminarPagoMembresia}
+                        permitirCanje={esAdminPagos}
+                        precioPlan={planSeleccionado?.precio || 0}
                       />
                     </div>
 
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Método de pago
-                      </label>
-
-                      <select
-                        value={
-                          formMembresia.metodo_pago
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          actualizarMembresia(
-                            'metodo_pago',
-                            e.target
-                              .value
-                          )
-                        }
-                        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
-                      >
-                        <option value="efectivo">
-                          Efectivo
-                        </option>
-
-                        <option value="transferencia">
-                          Transferencia
-                        </option>
-
-                        <option value="tarjeta">
-                          Tarjeta
-                        </option>
-                      </select>
-                    </div>
-
-                    {formMembresia.metodo_pago ===
-                      'transferencia' && (
-                      <>
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-gray-700">
-                            Número de comprobante
-                          </label>
-
-                          <input
-                            value={
-                              formMembresia.numero_comprobante
-                            }
-                            onChange={(
-                              e
-                            ) =>
-                              actualizarMembresia(
-                                'numero_comprobante',
-                                e
-                                  .target
-                                  .value
-                              )
-                            }
-                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
-                            placeholder="Ej: TRX-001234"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-gray-700">
-                            Banco de origen
-                          </label>
-
-                          <input
-                            value={
-                              formMembresia.banco_origen
-                            }
-                            onChange={(
-                              e
-                            ) =>
-                              actualizarMembresia(
-                                'banco_origen',
-                                e
-                                  .target
-                                  .value
-                              )
-                            }
-                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
-                            placeholder="Ej: Banco Pichincha"
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {formMembresia.metodo_pago ===
-                      'tarjeta' && (
-                      <>
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-gray-700">
-                            Tipo de tarjeta
-                          </label>
-
-                          <select
-                            value={
-                              formMembresia.tipo_tarjeta
-                            }
-                            onChange={(
-                              e
-                            ) =>
-                              actualizarMembresia(
-                                'tipo_tarjeta',
-                                e
-                                  .target
-                                  .value
-                              )
-                            }
-                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
-                          >
-                            <option value="">
-                              Seleccionar tarjeta
-                            </option>
-
-                            {tiposTarjeta.map(
-                              (
-                                tarjeta
-                              ) => (
-                                <option
-                                  key={
-                                    tarjeta.value
-                                  }
-                                  value={
-                                    tarjeta.value
-                                  }
-                                >
-                                  {
-                                    tarjeta.label
-                                  }
-                                </option>
-                              )
-                            )}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-gray-700">
-                            Número de comprobante
-                          </label>
-
-                          <input
-                            value={
-                              formMembresia.numero_comprobante
-                            }
-                            onChange={(
-                              e
-                            ) =>
-                              actualizarMembresia(
-                                'numero_comprobante',
-                                e
-                                  .target
-                                  .value
-                              )
-                            }
-                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
-                            placeholder="Ej: POS-001234"
-                          />
-                        </div>
-                      </>
-                    )}
-
                     <div className="md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Nota del pago / membresía
+                        Nota general de la membresía
                       </label>
 
                       <textarea
-                        value={
-                          formMembresia.notas
-                        }
-                        onChange={(
-                          e
-                        ) =>
+                        value={formMembresia.notas}
+                        onChange={(e) =>
                           actualizarMembresia(
                             'notas',
-                            e.target
-                              .value
+                            e.target.value
                           )
                         }
                         className="min-h-20 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"

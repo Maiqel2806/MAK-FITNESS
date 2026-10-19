@@ -36,19 +36,324 @@ const planInicial = {
   duracion_dias: '',
   activo: true,
   es_promocion: false,
+
+  // MAK_PROMOS_FECHA_FIJA_V1
+  modalidad_vigencia: 'duracion',
+  vigencia_desde: '',
+  vigencia_hasta: '',
+}
+
+// MAK_PAGOS_SEGUROS_V1
+function crearIdOperacion() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID()
+  }
+
+  const plantilla = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+  return plantilla.replace(/[xy]/g, (caracter) => {
+    const aleatorio = Math.floor(Math.random() * 16)
+    const valor = caracter === 'x' ? aleatorio : (aleatorio & 0x3) | 0x8
+    return valor.toString(16)
+  })
+}
+
+function crearPagoMembresia(monto = '') {
+  return {
+    metodo_pago: 'efectivo',
+    monto: String(monto ?? ''),
+    notas: '',
+    numero_comprobante: '',
+    banco_origen: '',
+    tipo_tarjeta: '',
+  }
+}
+
+function ajustarPagoMembresiaPorMetodo(pago, campo, valor) {
+  const nuevo = {
+    ...pago,
+    [campo]: valor,
+  }
+
+  if (campo !== 'metodo_pago') return nuevo
+
+  if (valor === 'efectivo' || valor === 'canje') {
+    nuevo.numero_comprobante = ''
+    nuevo.banco_origen = ''
+    nuevo.tipo_tarjeta = ''
+  }
+
+  if (valor === 'transferencia') {
+    nuevo.tipo_tarjeta = ''
+  }
+
+  if (valor === 'tarjeta') {
+    nuevo.banco_origen = ''
+  }
+
+  return nuevo
+}
+
+function obtenerTotalPagosFormulario(pagos) {
+  return (pagos || []).reduce(
+    (total, pago) => total + Number(pago?.monto || 0),
+    0
+  )
+}
+
+function validarPagosMembresia(pagos, precioPlan, permitirCanje) {
+  if (!Array.isArray(pagos) || pagos.length === 0) {
+    return 'Debes registrar al menos una forma de pago.'
+  }
+
+  if (pagos.length > 5) {
+    return 'No se permiten más de 5 formas de pago en una operación.'
+  }
+
+  for (let indice = 0; indice < pagos.length; indice += 1) {
+    const pago = pagos[indice] || {}
+    const numero = indice + 1
+    const monto = Number(pago.monto)
+
+    if (!monto || monto <= 0) {
+      return `El monto de la forma de pago ${numero} debe ser mayor a 0.`
+    }
+
+    if (!['efectivo', 'transferencia', 'tarjeta', 'canje'].includes(pago.metodo_pago)) {
+      return `La forma de pago ${numero} no es válida.`
+    }
+
+    if (pago.metodo_pago === 'canje') {
+      if (!permitirCanje) {
+        return 'Los canjes solo pueden ser registrados por dueño o administrador.'
+      }
+
+      if (!String(pago.notas || '').trim()) {
+        return `Describe el motivo del canje en la forma de pago ${numero}.`
+      }
+    }
+
+    if (pago.metodo_pago === 'transferencia') {
+      if (!String(pago.numero_comprobante || '').trim()) {
+        return `Ingresa el comprobante de la transferencia ${numero}.`
+      }
+
+      if (!String(pago.banco_origen || '').trim()) {
+        return `Ingresa el banco de origen de la transferencia ${numero}.`
+      }
+    }
+
+    if (pago.metodo_pago === 'tarjeta') {
+      if (!String(pago.numero_comprobante || '').trim()) {
+        return `Ingresa el comprobante del pago con tarjeta ${numero}.`
+      }
+
+      if (!pago.tipo_tarjeta) {
+        return `Selecciona el tipo de tarjeta de la forma de pago ${numero}.`
+      }
+    }
+  }
+
+  const total = obtenerTotalPagosFormulario(pagos)
+  const precio = Number(precioPlan || 0)
+
+  if (precio > 0 && Math.round(total * 100) < Math.round(precio * 100)) {
+    return `Pago incompleto. Registrado: $${total.toFixed(2)}. Valor del plan: $${precio.toFixed(2)}.`
+  }
+
+  return ''
+}
+
+function PagosMembresiaEditor({
+  pagos,
+  actualizarPago,
+  agregarPago,
+  eliminarPago,
+  permitirCanje,
+  precioPlan,
+}) {
+  const total = obtenerTotalPagosFormulario(pagos)
+  const precio = Number(precioPlan || 0)
+  const diferencia = precio - total
+
+  return (
+    <div className="space-y-3">
+      {(pagos || []).map((pago, indice) => (
+        <div
+          key={indice}
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-4"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-sm font-bold text-gray-900">
+              Forma de pago {indice + 1}
+            </p>
+
+            {pagos.length > 1 && (
+              <button
+                type="button"
+                onClick={() => eliminarPago(indice)}
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+              >
+                Quitar
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Monto
+              </label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={pago.monto}
+                onChange={(e) => actualizarPago(indice, 'monto', e.target.value)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                placeholder="0.00"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Método
+              </label>
+              <select
+                value={pago.metodo_pago}
+                onChange={(e) => actualizarPago(indice, 'metodo_pago', e.target.value)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+              >
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="tarjeta">Tarjeta</option>
+                {permitirCanje && <option value="canje">Canje</option>}
+              </select>
+            </div>
+
+            {pago.metodo_pago === 'transferencia' && (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Número de comprobante
+                  </label>
+                  <input
+                    value={pago.numero_comprobante}
+                    onChange={(e) => actualizarPago(indice, 'numero_comprobante', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Ej: TRX-001234"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Banco de origen
+                  </label>
+                  <input
+                    value={pago.banco_origen}
+                    onChange={(e) => actualizarPago(indice, 'banco_origen', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Ej: Banco Pichincha"
+                  />
+                </div>
+              </>
+            )}
+
+            {pago.metodo_pago === 'tarjeta' && (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Tipo de tarjeta
+                  </label>
+                  <select
+                    value={pago.tipo_tarjeta}
+                    onChange={(e) => actualizarPago(indice, 'tipo_tarjeta', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                  >
+                    <option value="">Seleccionar tarjeta</option>
+                    {tiposTarjeta.map((tarjeta) => (
+                      <option key={tarjeta.value} value={tarjeta.value}>
+                        {tarjeta.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Número de comprobante
+                  </label>
+                  <input
+                    value={pago.numero_comprobante}
+                    onChange={(e) => actualizarPago(indice, 'numero_comprobante', e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                    placeholder="Ej: POS-001234"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                {pago.metodo_pago === 'canje' ? 'Detalle del canje *' : 'Detalle de este pago'}
+              </label>
+              <textarea
+                value={pago.notas}
+                onChange={(e) => actualizarPago(indice, 'notas', e.target.value)}
+                className="min-h-20 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                placeholder={
+                  pago.metodo_pago === 'canje'
+                    ? 'Ej: Canje por servicio de bailoterapia'
+                    : 'Opcional'
+                }
+              />
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm">
+          <p className="font-bold text-gray-900">
+            Total registrado: ${total.toFixed(2)}
+          </p>
+          {precio > 0 && (
+            <p className={diferencia > 0.004 ? 'text-red-600' : 'text-green-700'}>
+              Valor del plan: ${precio.toFixed(2)}
+              {diferencia > 0.004
+                ? ` · Faltan $${diferencia.toFixed(2)}`
+                : diferencia < -0.004
+                  ? ` · Excede $${Math.abs(diferencia).toFixed(2)}`
+                  : ' · Pago exacto'}
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={agregarPago}
+          disabled={(pagos || []).length >= 5}
+          className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          + Agregar otro método
+        </button>
+      </div>
+    </div>
+  )
 }
 
 const membresiaInicial = {
   miembro_id: '',
   plan_id: '',
   fecha_inicio: obtenerFechaHoy(),
-  metodo_pago: 'efectivo',
-  monto: '',
   notas: '',
   renovacion_de_membresia_id: null,
-  numero_comprobante: '',
-  banco_origen: '',
-  tipo_tarjeta: '',
+  mantener_mismo_plan: null,
+  plan_historico_nombre: '',
+  plan_historico_precio: '',
+  plan_historico_duracion_dias: null,
+  plan_historico_duracion_meses: null,
+  operacion_id: '',
+  pagos: [crearPagoMembresia()],
 }
 
 const inscripcionInicial = {
@@ -293,6 +598,95 @@ function obtenerFechaRenovacionMembresia(
     : ''
 }
 
+function esPlanFechaFija(plan) {
+  return (
+    Boolean(plan?.es_promocion) &&
+    plan?.modalidad_vigencia === 'fecha_fija'
+  )
+}
+
+function calcularDiasInclusive(
+  fechaInicio,
+  fechaFin
+) {
+  if (!fechaInicio || !fechaFin) {
+    return 0
+  }
+
+  const inicio =
+    new Date(
+      `${fechaInicio}T00:00:00Z`
+    )
+
+  const fin =
+    new Date(
+      `${fechaFin}T00:00:00Z`
+    )
+
+  const diferencia =
+    Math.floor(
+      (
+        fin.getTime() -
+        inicio.getTime()
+      ) /
+      86400000
+    )
+
+  if (diferencia < 0) {
+    return 0
+  }
+
+  return diferencia + 1
+}
+
+function planDisponibleParaVenta(
+  plan
+) {
+  if (!plan?.activo) {
+    return false
+  }
+
+  if (!esPlanFechaFija(plan)) {
+    return true
+  }
+
+  if (
+    !plan.vigencia_desde ||
+    !plan.vigencia_hasta
+  ) {
+    return false
+  }
+
+  const hoy =
+    obtenerFechaHoy()
+
+  return (
+    hoy >= plan.vigencia_desde &&
+    hoy <= plan.vigencia_hasta
+  )
+}
+
+function obtenerEstadoPromoFecha(
+  plan
+) {
+  if (!esPlanFechaFija(plan)) {
+    return null
+  }
+
+  const hoy =
+    obtenerFechaHoy()
+
+  if (hoy < plan.vigencia_desde) {
+    return 'programada'
+  }
+
+  if (hoy > plan.vigencia_hasta) {
+    return 'finalizada'
+  }
+
+  return 'vigente'
+}
+
 function calcularFechaRenovacionPlan(
   fechaInicio,
   plan
@@ -302,6 +696,15 @@ function calcularFechaRenovacionPlan(
     !plan
   ) {
     return ''
+  }
+
+  if (esPlanFechaFija(plan)) {
+    return plan.vigencia_hasta
+      ? sumarDias(
+          plan.vigencia_hasta,
+          1
+        )
+      : ''
   }
 
   const meses =
@@ -514,6 +917,10 @@ function obtenerDetallePago(pago) {
 
   if (pago.metodo_pago === 'tarjeta') {
     return `Comprobante: ${pago.numero_comprobante || '-'} · Tarjeta: ${obtenerEtiquetaTarjeta(pago.tipo_tarjeta)}`
+  }
+
+  if (pago.metodo_pago === 'canje') {
+    return pago.notas ? `Canje · ${pago.notas}` : 'Canje'
   }
 
   return 'Pago en efectivo'
@@ -736,6 +1143,7 @@ function CamposDetallePago({ valores, actualizar }) {
 export default function MembresiasPage() {
   const perfil = usePerfil()
   const esDueno = perfil?.rol === 'dueno'
+  const esAdminPagos = ['dueno', 'administrador'].includes(perfil?.rol)
 
   const [miembros, setMiembros] = useState([])
   const [planes, setPlanes] = useState([])
@@ -743,10 +1151,12 @@ export default function MembresiasPage() {
   const [pagos, setPagos] = useState([])
 
   const [formPlan, setFormPlan] = useState(planInicial)
-  const [formMembresia, setFormMembresia] = useState({
+  const [formMembresia, setFormMembresia] = useState(() => ({
     ...membresiaInicial,
     fecha_inicio: obtenerFechaHoy(),
-  })
+    operacion_id: crearIdOperacion(),
+    pagos: [crearPagoMembresia()],
+  }))
   const [formInscripcion, setFormInscripcion] = useState(inscripcionInicial)
   const [formUpgrade, setFormUpgrade] = useState(upgradeInicial)
   const [formEditarMembresia, setFormEditarMembresia] = useState(edicionMembresiaInicial)
@@ -781,6 +1191,24 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
   const [mensaje, setMensaje] = useState('')
 
   const [detalleVencida, setDetalleVencida] = useState(null)
+
+  // MAK_RENOVACION_HISTORICA_V1
+  const [confirmacionRenovacion, setConfirmacionRenovacion] = useState(null)
+  const [detallePagos, setDetallePagos] = useState(null)
+  const [historialPagos, setHistorialPagos] = useState([])
+  const [historialRenovaciones, setHistorialRenovaciones] = useState([])
+  const [cargandoHistorialPagos, setCargandoHistorialPagos] = useState(false)
+  const [cargandoHistorialRenovaciones, setCargandoHistorialRenovaciones] = useState(false)
+  const [pagoCorreccion, setPagoCorreccion] = useState(null)
+  const [guardandoCorreccionPago, setGuardandoCorreccionPago] = useState(false)
+  const [formCorreccionPago, setFormCorreccionPago] = useState({
+    metodo_pago: 'efectivo',
+    notas: '',
+    numero_comprobante: '',
+    banco_origen: '',
+    tipo_tarjeta: '',
+    motivo: '',
+  })
 
   useEffect(() => {
     cargarDatos()
@@ -890,10 +1318,49 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
   }
 
   function actualizarPlan(campo, valor) {
-    setFormPlan((actual) => ({
-      ...actual,
-      [campo]: valor,
-    }))
+    setFormPlan((actual) => {
+      const nuevo = {
+        ...actual,
+        [campo]: valor,
+      }
+
+      if (
+        campo === 'es_promocion' &&
+        valor === true
+      ) {
+        // Todo NUEVO plan promocional se administra
+        // mediante fechas específicas.
+        nuevo.modalidad_vigencia =
+          'fecha_fija'
+
+        nuevo.duracion_dias = ''
+        nuevo.vigencia_desde = ''
+        nuevo.vigencia_hasta = ''
+      }
+
+      if (
+        campo === 'es_promocion' &&
+        valor === false
+      ) {
+        nuevo.modalidad_vigencia =
+          'duracion'
+
+        nuevo.vigencia_desde = ''
+        nuevo.vigencia_hasta = ''
+      }
+
+      if (
+        campo === 'modalidad_vigencia' &&
+        valor === 'fecha_fija'
+      ) {
+        nuevo.es_promocion = true
+        nuevo.duracion_dias = ''
+        nuevo.vigencia_desde = ''
+        nuevo.vigencia_hasta = ''
+      }
+
+      return nuevo
+    })
   }
 
   function actualizarMembresia(campo, valor) {
@@ -906,17 +1373,63 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
       if (campo === 'miembro_id') {
         nuevo.fecha_inicio = valor ? calcularFechaInicioInteligente(valor) : obtenerFechaHoy()
         nuevo.renovacion_de_membresia_id = null
+        nuevo.mantener_mismo_plan = null
+        nuevo.plan_historico_nombre = ''
+        nuevo.plan_historico_precio = ''
+        nuevo.plan_historico_duracion_dias = null
+        nuevo.plan_historico_duracion_meses = null
       }
 
       if (campo === 'plan_id') {
         const plan = planes.find((item) => item.id === valor)
+        const pagosActuales = Array.isArray(actual.pagos) && actual.pagos.length > 0
+          ? actual.pagos.map((pago) => ({ ...pago }))
+          : [crearPagoMembresia()]
 
-        if (plan) {
-          nuevo.monto = String(plan.precio)
+        if (pagosActuales.length === 1) {
+          pagosActuales[0].monto = plan ? String(plan.precio) : ''
         }
+
+        nuevo.pagos = pagosActuales
       }
 
-      return ajustarDetallePagoPorMetodo(nuevo, campo, valor)
+      return nuevo
+    })
+  }
+
+  function actualizarPagoMembresia(indice, campo, valor) {
+    setFormMembresia((actual) => ({
+      ...actual,
+      pagos: actual.pagos.map((pago, posicion) =>
+        posicion === indice
+          ? ajustarPagoMembresiaPorMetodo(pago, campo, valor)
+          : pago
+      ),
+    }))
+  }
+
+  function agregarPagoMembresia() {
+    setFormMembresia((actual) => {
+      if (actual.pagos.length >= 5) return actual
+
+      return {
+        ...actual,
+        pagos: [
+          ...actual.pagos,
+          crearPagoMembresia(),
+        ],
+      }
+    })
+  }
+
+  function eliminarPagoMembresia(indice) {
+    setFormMembresia((actual) => {
+      if (actual.pagos.length <= 1) return actual
+
+      return {
+        ...actual,
+        pagos: actual.pagos.filter((_, posicion) => posicion !== indice),
+      }
     })
   }
 
@@ -985,9 +1498,33 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
       nombre: plan.nombre || '',
       descripcion: plan.descripcion || '',
       precio: String(plan.precio || ''),
-      duracion_dias: String(plan.duracion_dias || ''),
-      activo: Boolean(plan.activo),
-      es_promocion: Boolean(plan.es_promocion),
+
+      duracion_dias:
+        plan.modalidad_vigencia ===
+        'fecha_fija'
+          ? ''
+          : String(
+              plan.duracion_dias ||
+              ''
+            ),
+
+      activo:
+        Boolean(plan.activo),
+
+      es_promocion:
+        Boolean(plan.es_promocion),
+
+      modalidad_vigencia:
+        plan.modalidad_vigencia ||
+        'duracion',
+
+      vigencia_desde:
+        plan.vigencia_desde ||
+        '',
+
+      vigencia_hasta:
+        plan.vigencia_hasta ||
+        '',
     })
 
     setEditandoPlanId(plan.id)
@@ -1012,6 +1549,8 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
     setFormMembresia({
       ...membresiaInicial,
       fecha_inicio: obtenerFechaHoy(),
+      operacion_id: crearIdOperacion(),
+      pagos: [crearPagoMembresia()],
     })
 
     cerrarFormularios()
@@ -1024,38 +1563,193 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
     }, 100)
   }
 
-  function renovarMembresia(membresia) {
-    const planId = membresia.plan_id
-    const plan = planes.find((item) => item.id === planId)
-    const fechaInicio = calcularFechaInicioInteligente(membresia.miembro_id)
+  function esMembresiaMensualHistorica(membresia) {
+    if (
+      membresia
+        .plan_modalidad_vigencia_snapshot ===
+      'fecha_fija'
+    ) {
+      return false
+    }
+
+    const mesesSnapshot = Number(
+      membresia.plan_duracion_meses_snapshot || 0
+    )
+
+    if (mesesSnapshot === 1) {
+      return true
+    }
+
+    return (
+      !membresia.plan_duracion_meses_snapshot &&
+      Number(
+        membresia.plan_duracion_dias_snapshot || 0
+      ) === 30
+    )
+  }
+
+  function prepararFormularioRenovacion(
+    membresia,
+    mantenerMismoPlan
+  ) {
+    const fechaInicio =
+      calcularFechaInicioInteligente(
+        membresia.miembro_id
+      )
+
+    const precioHistorico = Number(
+      membresia.plan_precio_snapshot ??
+      membresia.planes?.precio ??
+      0
+    )
+
+    const nombreHistorico =
+      membresia.plan_nombre_snapshot ||
+      membresia.planes?.nombre ||
+      'Plan registrado'
 
     setFormMembresia({
-      miembro_id: membresia.miembro_id,
-      plan_id: planId || '',
-      fecha_inicio: fechaInicio,
-      metodo_pago: 'efectivo',
-      monto: plan ? String(plan.precio) : String(membresia.plan_precio_snapshot || ''),
-      notas: `Renovación de membresía programada para ${formatearFecha(obtenerFechaRenovacionMembresia(membresia))}.`,
-      renovacion_de_membresia_id: membresia.id,
-      numero_comprobante: '',
-      banco_origen: '',
-      tipo_tarjeta: '',
+      ...membresiaInicial,
+
+      miembro_id:
+        membresia.miembro_id,
+
+      plan_id:
+        mantenerMismoPlan
+          ? (
+              membresia.plan_id ||
+              ''
+            )
+          : '',
+
+      fecha_inicio:
+        fechaInicio,
+
+      notas:
+        mantenerMismoPlan
+          ? `Renovación conservando ${nombreHistorico} por ${formatearDinero(precioHistorico)}.`
+          : `Renovación con cambio de plan desde ${nombreHistorico}.`,
+
+      renovacion_de_membresia_id:
+        membresia.id,
+
+      mantener_mismo_plan:
+        Boolean(
+          mantenerMismoPlan
+        ),
+
+      plan_historico_nombre:
+        nombreHistorico,
+
+      plan_historico_precio:
+        precioHistorico,
+
+      plan_historico_duracion_dias:
+        membresia
+          .plan_duracion_dias_snapshot ??
+        null,
+
+      plan_historico_duracion_meses:
+        membresia
+          .plan_duracion_meses_snapshot ??
+        (
+          Number(
+            membresia
+              .plan_duracion_dias_snapshot ||
+            0
+          ) === 30
+            ? 1
+            : null
+        ),
+
+      operacion_id:
+        crearIdOperacion(),
+
+      pagos: [
+        crearPagoMembresia(
+          mantenerMismoPlan
+            ? precioHistorico
+            : ''
+        ),
+      ],
     })
 
+    setConfirmacionRenovacion(
+      null
+    )
+
     cerrarFormularios()
-    setMostrarMembresia(true)
+
+    setMostrarMembresia(
+      true
+    )
+
     setError('')
-    setMensaje('La nueva membresía iniciará en la fecha de renovación correspondiente, sin perder días de vigencia.')
+
+    if (mantenerMismoPlan) {
+
+      setMensaje(
+        `Se conservarán el plan y el precio histórico: ${nombreHistorico} · ${formatearDinero(precioHistorico)}.`
+      )
+
+    } else if (
+      esMembresiaMensualHistorica(
+        membresia
+      )
+    ) {
+
+      setMensaje(
+        `Selecciona uno de los planes activos actuales. No se conservará automáticamente ${nombreHistorico}.`
+      )
+
+    } else {
+
+      setMensaje(
+        `El plan anterior (${nombreHistorico}) no es mensual y no se renueva automáticamente. Selecciona un plan activo actual.`
+      )
+    }
 
     setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth',
+      })
     }, 100)
+  }
+
+  function renovarMembresia(
+    membresia
+  ) {
+    setError('')
+    setMensaje('')
+
+    if (
+      esMembresiaMensualHistorica(
+        membresia
+      )
+    ) {
+
+      cerrarFormularios()
+
+      setConfirmacionRenovacion(
+        membresia
+      )
+
+      return
+    }
+
+    prepararFormularioRenovacion(
+      membresia,
+      false
+    )
   }
 
   function limpiarMembresia() {
     setFormMembresia({
       ...membresiaInicial,
       fecha_inicio: obtenerFechaHoy(),
+      operacion_id: crearIdOperacion(),
+      pagos: [crearPagoMembresia()],
     })
 
     setMostrarMembresia(false)
@@ -1153,14 +1847,81 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
     setError('')
     setMensaje('')
 
+    const esFechaFija =
+      Boolean(
+        formPlan.es_promocion
+      ) &&
+      formPlan.modalidad_vigencia ===
+        'fecha_fija'
+
+    const esPromoHistoricaDuracion =
+      Boolean(
+        formPlan.es_promocion
+      ) &&
+      formPlan.modalidad_vigencia ===
+        'duracion' &&
+      Boolean(editandoPlanId)
+
     const datos = {
-      nombre: formPlan.nombre.trim(),
-      descripcion: formPlan.descripcion.trim() || null,
-      precio: Number(formPlan.precio),
-      duracion_dias: Number(formPlan.duracion_dias),
-      duracion_meses: inferirDuracionMeses(formPlan.duracion_dias),
-      activo: Boolean(formPlan.activo),
-      es_promocion: Boolean(formPlan.es_promocion),
+      nombre:
+        formPlan.nombre.trim(),
+
+      descripcion:
+        formPlan.descripcion.trim() ||
+        null,
+
+      precio:
+        Number(formPlan.precio),
+
+      duracion_dias:
+        esFechaFija
+          ? null
+          : Number(
+              formPlan.duracion_dias
+            ),
+
+      duracion_meses:
+        esFechaFija
+          ? null
+          : inferirDuracionMeses(
+              formPlan.duracion_dias
+            ),
+
+      activo:
+        Boolean(formPlan.activo),
+
+      es_promocion:
+        Boolean(
+          formPlan.es_promocion
+        ),
+
+      modalidad_vigencia:
+        esFechaFija
+          ? 'fecha_fija'
+          : 'duracion',
+
+      vigencia_desde:
+        esFechaFija
+          ? formPlan.vigencia_desde
+          : null,
+
+      vigencia_hasta:
+        esFechaFija
+          ? formPlan.vigencia_hasta
+          : null,
+    }
+
+    if (
+      formPlan.es_promocion &&
+      !editandoPlanId &&
+      !esFechaFija
+    ) {
+      setError(
+        'Los nuevos planes promocionales deben configurarse mediante fecha inicial y fecha final.'
+      )
+
+      setGuardandoPlan(false)
+      return
     }
 
     if (!datos.nombre) {
@@ -1175,8 +1936,41 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
       return
     }
 
-    if (!datos.duracion_dias || datos.duracion_dias <= 0) {
-      setError('La duración del plan debe ser mayor a 0 días.')
+    if (esFechaFija) {
+
+      if (
+        !formPlan.vigencia_desde ||
+        !formPlan.vigencia_hasta
+      ) {
+        setError(
+          'Debes seleccionar la fecha inicial y la fecha final de la promoción.'
+        )
+
+        setGuardandoPlan(false)
+        return
+      }
+
+      if (
+        formPlan.vigencia_hasta <
+        formPlan.vigencia_desde
+      ) {
+        setError(
+          'La fecha final de la promoción no puede ser anterior a la fecha inicial.'
+        )
+
+        setGuardandoPlan(false)
+        return
+      }
+
+    } else if (
+      !datos.duracion_dias ||
+      datos.duracion_dias <= 0
+    ) {
+
+      setError(
+        'La duración del plan debe ser mayor a 0 días.'
+      )
+
       setGuardandoPlan(false)
       return
     }
@@ -1208,64 +2002,198 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
 
   async function guardarMembresia(evento) {
     evento.preventDefault()
+
+    if (guardandoMembresia) return
+
     setGuardandoMembresia(true)
     setError('')
     setMensaje('')
 
-    const plan = planes.find((item) => item.id === formMembresia.plan_id)
+    const esRenovacion = Boolean(
+      formMembresia
+        .renovacion_de_membresia_id
+    )
+
+    const mantenerMismoPlan =
+      esRenovacion &&
+      formMembresia
+        .mantener_mismo_plan === true
+
+    const plan = planes.find(
+      (item) =>
+        item.id ===
+        formMembresia.plan_id
+    )
 
     if (!formMembresia.miembro_id) {
-      setError('Debes seleccionar un miembro.')
+      setError(
+        'Debes seleccionar un miembro.'
+      )
+
       setGuardandoMembresia(false)
       return
     }
 
-    if (!plan) {
-      setError('Debes seleccionar un plan válido.')
+    if (
+      esRenovacion &&
+      formMembresia
+        .mantener_mismo_plan === null
+    ) {
+
+      setError(
+        'Debes indicar si la renovación conserva el plan anterior o cambia de plan.'
+      )
+
       setGuardandoMembresia(false)
       return
     }
 
-    if (plan.es_upgrade || plan.codigo === 'MENSUAL_FIDELIZACION') {
-      setError('El mensual fidelización no se registra directamente. Usa el botón “Ampliar a mensual fidelización” desde un plan semanal fidelización vigente.')
+    if (
+      !mantenerMismoPlan &&
+      !plan
+    ) {
+
+      setError(
+        'Debes seleccionar un plan válido.'
+      )
+
+      setGuardandoMembresia(false)
+      return
+    }
+
+    if (
+      !mantenerMismoPlan &&
+      (
+        plan.es_upgrade ||
+        plan.codigo ===
+          'MENSUAL_FIDELIZACION'
+      )
+    ) {
+
+      setError(
+        'El mensual fidelización no se registra directamente. Usa el botón “Ampliar a mensual fidelización” desde un plan semanal fidelización vigente.'
+      )
+
       setGuardandoMembresia(false)
       return
     }
 
     if (!formMembresia.fecha_inicio) {
-      setError('La fecha de inicio es obligatoria.')
+
+      setError(
+        'La fecha de inicio es obligatoria.'
+      )
+
       setGuardandoMembresia(false)
       return
     }
 
-    const monto = Number(formMembresia.monto)
+    const precioObjetivo =
+      mantenerMismoPlan
+        ? Number(
+            formMembresia
+              .plan_historico_precio ||
+            0
+          )
+        : Number(
+            plan?.precio ||
+            0
+          )
 
-    if (!monto || monto <= 0) {
-      setError('El monto del pago debe ser mayor a 0.')
+    const errorPagos =
+      validarPagosMembresia(
+        formMembresia.pagos,
+        precioObjetivo,
+        esAdminPagos
+      )
+
+    if (errorPagos) {
+      setError(errorPagos)
       setGuardandoMembresia(false)
       return
     }
 
-    const errorPago = validarDetallePago(formMembresia)
+    const operacionId = formMembresia.operacion_id || crearIdOperacion()
 
-    if (errorPago) {
-      setError(errorPago)
-      setGuardandoMembresia(false)
-      return
+    if (!formMembresia.operacion_id) {
+      setFormMembresia((actual) => ({
+        ...actual,
+        operacion_id: operacionId,
+      }))
     }
 
-    const { error } = await supabase.rpc('registrar_membresia_inteligente', {
-      p_miembro_id: formMembresia.miembro_id,
-      p_plan_id: formMembresia.plan_id,
-      p_metodo_pago: formMembresia.metodo_pago,
-      p_monto: monto,
-      p_notas: formMembresia.notas || null,
-      p_fecha_inicio_manual: formMembresia.fecha_inicio,
-      p_renovacion_de_membresia_id: formMembresia.renovacion_de_membresia_id || null,
-      p_numero_comprobante: formMembresia.numero_comprobante || null,
-      p_banco_origen: formMembresia.banco_origen || null,
-      p_tipo_tarjeta: formMembresia.tipo_tarjeta || null,
-    })
+    const pagosOperacion = formMembresia.pagos.map((pago) => ({
+      metodo_pago: pago.metodo_pago,
+      monto: Number(pago.monto),
+      notas: String(pago.notas || '').trim() || null,
+      numero_comprobante: String(pago.numero_comprobante || '').trim() || null,
+      banco_origen: String(pago.banco_origen || '').trim() || null,
+      tipo_tarjeta: pago.tipo_tarjeta || null,
+    }))
+
+    const respuestaRegistro =
+      esRenovacion
+
+        ? await supabase.rpc(
+            'registrar_renovacion_con_pagos',
+            {
+              p_miembro_id:
+                formMembresia.miembro_id,
+
+              p_membresia_anterior_id:
+                formMembresia
+                  .renovacion_de_membresia_id,
+
+              p_mantener_mismo_plan:
+                mantenerMismoPlan,
+
+              p_plan_nuevo_id:
+                mantenerMismoPlan
+                  ? null
+                  : formMembresia.plan_id,
+
+              p_pagos:
+                pagosOperacion,
+
+              p_notas:
+                formMembresia.notas ||
+                null,
+
+              p_operacion_id:
+                operacionId,
+            }
+          )
+
+        : await supabase.rpc(
+            'registrar_membresia_con_pagos',
+            {
+              p_miembro_id:
+                formMembresia.miembro_id,
+
+              p_plan_id:
+                formMembresia.plan_id,
+
+              p_pagos:
+                pagosOperacion,
+
+              p_fecha_inicio_manual:
+                formMembresia.fecha_inicio,
+
+              p_renovacion_de_membresia_id:
+                null,
+
+              p_notas:
+                formMembresia.notas ||
+                null,
+
+              p_operacion_id:
+                operacionId,
+            }
+          )
+
+    const {
+      error,
+    } = respuestaRegistro
 
     if (error) {
       setError(error.message)
@@ -1276,7 +2204,11 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
     await cargarDatos()
     limpiarMembresia()
     setFiltroEstado('activa')
-    setMensaje('Membresía y pago registrados correctamente.')
+    setMensaje(
+      esRenovacion
+        ? 'Renovación y pagos registrados correctamente. La decisión quedó guardada en el historial.'
+        : 'Membresía y pagos registrados correctamente.'
+    )
     setGuardandoMembresia(false)
   }
 
@@ -1604,6 +2536,247 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
     )
   }
 
+  async function cargarHistorialPagosMembresia(membresiaId) {
+    const idsPagos = pagos
+      .filter((pago) => pago.membresia_id === membresiaId)
+      .map((pago) => pago.id)
+
+    if (idsPagos.length === 0) {
+      setHistorialPagos([])
+      return
+    }
+
+    const { data, error: errorHistorial } = await supabase
+      .from('pagos_historial')
+      .select('id, pago_id, accion, datos_anteriores, datos_nuevos, motivo, realizado_por, fecha_evento')
+      .in('pago_id', idsPagos)
+      .order('fecha_evento', { ascending: false })
+
+    if (errorHistorial) {
+      throw new Error(errorHistorial.message)
+    }
+
+    setHistorialPagos(data || [])
+  }
+
+  async function cargarHistorialRenovacionesMiembro(
+    miembroId
+  ) {
+    setCargandoHistorialRenovaciones(
+      true
+    )
+
+    const {
+      data,
+      error: errorHistorial,
+    } = await supabase
+      .from(
+        'membresias_renovacion_historial'
+      )
+      .select(`
+        id,
+        miembro_id,
+        membresia_anterior_id,
+        membresia_nueva_id,
+        decision,
+        plan_anterior_nombre,
+        plan_anterior_precio,
+        plan_nuevo_nombre,
+        plan_nuevo_precio,
+        fecha_inicio_anterior,
+        fecha_fin_anterior,
+        fecha_inicio_nueva,
+        fecha_fin_nueva,
+        motivo,
+        realizado_por,
+        fecha_evento
+      `)
+      .eq(
+        'miembro_id',
+        miembroId
+      )
+      .order(
+        'fecha_evento',
+        {
+          ascending: false,
+        }
+      )
+
+    setCargandoHistorialRenovaciones(
+      false
+    )
+
+    if (errorHistorial) {
+      throw new Error(
+        errorHistorial.message
+      )
+    }
+
+    setHistorialRenovaciones(
+      data || []
+    )
+  }
+
+  async function abrirHistorialPagos(membresia) {
+    if (!esAdminPagos) {
+      setError('Solo dueño o administrador puede consultar el historial de pagos.')
+      return
+    }
+
+    setDetallePagos(membresia)
+    setHistorialPagos([])
+    setHistorialRenovaciones([])
+    setPagoCorreccion(null)
+    setCargandoHistorialPagos(true)
+    setError('')
+
+    try {
+
+      await Promise.all([
+        cargarHistorialPagosMembresia(
+          membresia.id
+        ),
+
+        cargarHistorialRenovacionesMiembro(
+          membresia.miembro_id
+        ),
+      ])
+
+    } catch (errorHistorial) {
+
+      setError(
+        errorHistorial.message
+      )
+
+    } finally {
+
+      setCargandoHistorialPagos(
+        false
+      )
+
+      setCargandoHistorialRenovaciones(
+        false
+      )
+    }
+  }
+
+  function cerrarHistorialPagos() {
+    setDetallePagos(null)
+    setHistorialPagos([])
+    setHistorialRenovaciones([])
+    setPagoCorreccion(null)
+    setGuardandoCorreccionPago(false)
+  }
+
+  function iniciarCorreccionPago(pago) {
+    setPagoCorreccion(pago)
+    setFormCorreccionPago({
+      metodo_pago: pago.metodo_pago || 'efectivo',
+      notas: pago.notas || '',
+      numero_comprobante: pago.numero_comprobante || '',
+      banco_origen: pago.banco_origen || '',
+      tipo_tarjeta: pago.tipo_tarjeta || '',
+      motivo: '',
+    })
+  }
+
+  function actualizarCorreccionPago(campo, valor) {
+    setFormCorreccionPago((actual) =>
+      ajustarDetallePagoPorMetodo(
+        {
+          ...actual,
+          [campo]: valor,
+        },
+        campo,
+        valor
+      )
+    )
+  }
+
+  async function guardarCorreccionPago(evento) {
+    evento.preventDefault()
+
+    if (!esAdminPagos || !pagoCorreccion || !detallePagos) return
+    if (guardandoCorreccionPago) return
+
+    const errorDetalle = validarDetallePago(formCorreccionPago)
+
+    if (errorDetalle) {
+      setError(errorDetalle)
+      return
+    }
+
+    if (
+      formCorreccionPago.metodo_pago === 'canje' &&
+      !String(formCorreccionPago.notas || '').trim()
+    ) {
+      setError('Para un canje debes indicar el motivo o servicio asociado.')
+      return
+    }
+
+    if (!String(formCorreccionPago.motivo || '').trim()) {
+      setError('Debes indicar por qué se corrige este pago.')
+      return
+    }
+
+    setGuardandoCorreccionPago(true)
+    setError('')
+
+    const { error: errorCorreccion } = await supabase.rpc('corregir_pago_mak', {
+      p_pago_id: pagoCorreccion.id,
+      p_metodo_pago: formCorreccionPago.metodo_pago,
+      p_monto: Number(pagoCorreccion.monto),
+      p_notas: String(formCorreccionPago.notas || '').trim() || null,
+      p_numero_comprobante: String(formCorreccionPago.numero_comprobante || '').trim() || null,
+      p_banco_origen: String(formCorreccionPago.banco_origen || '').trim() || null,
+      p_tipo_tarjeta: formCorreccionPago.tipo_tarjeta || null,
+      p_motivo: formCorreccionPago.motivo.trim(),
+    })
+
+    if (errorCorreccion) {
+      setError(errorCorreccion.message)
+      setGuardandoCorreccionPago(false)
+      return
+    }
+
+    const { data: pagoActualizado, error: errorPagoActualizado } = await supabase
+      .from('pagos')
+      .select('*')
+      .eq('id', pagoCorreccion.id)
+      .single()
+
+    if (errorPagoActualizado) {
+      setError(errorPagoActualizado.message)
+      setGuardandoCorreccionPago(false)
+      return
+    }
+
+    setPagos((actuales) =>
+      actuales.map((pago) =>
+        pago.id === pagoActualizado.id ? pagoActualizado : pago
+      )
+    )
+
+    setPagoCorreccion(null)
+    setFormCorreccionPago({
+      metodo_pago: 'efectivo',
+      notas: '',
+      numero_comprobante: '',
+      banco_origen: '',
+      tipo_tarjeta: '',
+      motivo: '',
+    })
+
+    try {
+      await cargarHistorialPagosMembresia(detallePagos.id)
+    } catch (errorHistorial) {
+      setError(errorHistorial.message)
+    }
+
+    setMensaje('Pago corregido. El valor anterior quedó guardado en el historial.')
+    setGuardandoCorreccionPago(false)
+  }
+
   const membresiasConEstadoReal = useMemo(() => {
     const hoy = obtenerFechaHoy()
 
@@ -1883,7 +3056,12 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
   const planesActivos = planes.filter((plan) => plan.activo)
 
   const planesDisponiblesVenta = planesActivos.filter((plan) => {
-    return !plan.es_upgrade && plan.codigo !== 'MENSUAL_FIDELIZACION'
+    return (
+      !plan.es_upgrade &&
+      plan.codigo !==
+        'MENSUAL_FIDELIZACION' &&
+      planDisponibleParaVenta(plan)
+    )
   })
 
   const planesVisibles = useMemo(() => {
@@ -1996,6 +3174,53 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
       ['activa', 'por_caducar', 'vence_hoy'].includes(membresia.estado_real)
     )
   }
+
+
+  const esRenovacionFormulario =
+    Boolean(
+      formMembresia
+        .renovacion_de_membresia_id
+    )
+
+  const mantienePlanHistoricoFormulario =
+    esRenovacionFormulario &&
+    formMembresia
+      .mantener_mismo_plan === true
+
+  const planActualFormulario =
+    planes.find(
+      (plan) =>
+        plan.id ===
+        formMembresia.plan_id
+    )
+
+  const precioFormularioMembresia =
+    mantienePlanHistoricoFormulario
+      ? Number(
+          formMembresia
+            .plan_historico_precio ||
+          0
+        )
+      : Number(
+          planActualFormulario
+            ?.precio ||
+          0
+        )
+
+  const planCalculoFormulario =
+    mantienePlanHistoricoFormulario
+
+      ? {
+          duracion_dias:
+            formMembresia
+              .plan_historico_duracion_dias,
+
+          duracion_meses:
+            formMembresia
+              .plan_historico_duracion_meses,
+        }
+
+      : planActualFormulario
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
@@ -2213,6 +3438,531 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
         </div>
       )}
 
+      {confirmacionRenovacion && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          onClick={() =>
+            setConfirmacionRenovacion(
+              null
+            )
+          }
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+            <div className="flex items-start justify-between gap-4">
+
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Confirmar renovación
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  {obtenerNombreSocio(
+                    confirmacionRenovacion
+                  )}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setConfirmacionRenovacion(
+                    null
+                  )
+                }
+                className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100"
+              >
+                <X size={19} />
+              </button>
+
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-teal-200 bg-teal-50 p-4">
+
+              <p className="text-sm font-semibold text-gray-700">
+                Este socio tiene un plan mensual registrado anteriormente:
+              </p>
+
+              <p className="mt-2 text-lg font-bold text-gray-900">
+                {obtenerNombrePlan(
+                  confirmacionRenovacion
+                )}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-700">
+                Precio histórico:{' '}
+
+                <strong>
+                  {formatearDinero(
+                    confirmacionRenovacion
+                      .plan_precio_snapshot ??
+                    confirmacionRenovacion
+                      .planes?.precio ??
+                    0
+                  )}
+                </strong>
+              </p>
+
+            </div>
+
+            <p className="mt-5 text-sm font-semibold text-gray-800">
+              ¿Deseas renovar manteniendo el mismo plan y el mismo precio registrado anteriormente?
+            </p>
+
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+              <button
+                type="button"
+                onClick={() =>
+                  prepararFormularioRenovacion(
+                    confirmacionRenovacion,
+                    true
+                  )
+                }
+                className="rounded-xl bg-black px-4 py-3 text-sm font-bold text-white transition hover:bg-gray-800"
+              >
+                Sí, mantener plan y precio
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  prepararFormularioRenovacion(
+                    confirmacionRenovacion,
+                    false
+                  )
+                }
+                className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-800 transition hover:bg-gray-50"
+              >
+                No, elegir otro plan
+              </button>
+
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {detallePagos && esAdminPagos && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={cerrarHistorialPagos}
+        >
+          <div
+            className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Historial de membresía
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  {obtenerNombreSocio(detallePagos)} · {obtenerNombrePlan(detallePagos)}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={cerrarHistorialPagos}
+                className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <div className="mt-5">
+              <h3 className="text-sm font-bold text-gray-900">Pagos registrados</h3>
+
+              <div className="mt-3 space-y-3">
+                {obtenerPagosMembresia(detallePagos.id).map((pago) => (
+                  <div
+                    key={pago.id}
+                    className="rounded-xl border border-gray-200 p-4"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-bold text-gray-900">
+                          {formatearDinero(pago.monto)} · <span className="capitalize">{pago.metodo_pago}</span>
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {pago.fecha_pago ? new Date(pago.fecha_pago).toLocaleString('es-EC', {
+                            timeZone: 'America/Guayaquil',
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }) : '-'}
+                        </p>
+                        <p className="mt-2 text-sm text-gray-600">
+                          {obtenerDetallePago(pago)}
+                        </p>
+                        {pago.notas && (
+                          <p className="mt-1 text-sm text-gray-600">
+                            Nota: {pago.notas}
+                          </p>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => iniciarCorreccionPago(pago)}
+                        className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
+                      >
+                        Corregir método
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {obtenerPagosMembresia(detallePagos.id).length === 0 && (
+                  <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
+                    Esta membresía no tiene pagos asociados.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-gray-200 pt-5">
+
+              <h3 className="text-sm font-bold text-gray-900">
+                Historial de renovaciones
+              </h3>
+
+              <p className="mt-1 text-xs text-gray-500">
+                Registra si se conservó el plan/precio anterior o si se cambió a otro plan.
+              </p>
+
+              {cargandoHistorialRenovaciones ? (
+
+                <p className="mt-3 rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
+                  Cargando historial de renovaciones...
+                </p>
+
+              ) : historialRenovaciones.length === 0 ? (
+
+                <p className="mt-3 rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
+                  Todavía no existen decisiones de renovación registradas con el nuevo historial.
+                </p>
+
+              ) : (
+
+                <div className="mt-3 space-y-3">
+
+                  {historialRenovaciones.map(
+                    (evento) => (
+
+                      <div
+                        key={evento.id}
+                        className="rounded-xl border border-gray-200 bg-gray-50 p-4"
+                      >
+
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+
+                          <div>
+
+                            <p className="text-sm font-bold text-gray-900">
+
+                              {evento.decision ===
+                              'mismo_plan'
+
+                                ? 'Mismo plan y precio histórico'
+
+                                : evento.decision ===
+                                  'promo_finalizada_cambio_plan'
+
+                                  ? 'Promoción finalizada · cambio de plan'
+
+                                  : 'Cambio de plan'}
+
+                            </p>
+
+                            <p className="mt-1 text-sm text-gray-700">
+
+                              {evento.plan_anterior_nombre ||
+                                'Plan anterior'}
+
+                              {' ('}
+
+                              {formatearDinero(
+                                evento.plan_anterior_precio ||
+                                0
+                              )}
+
+                              {') → '}
+
+                              {evento.plan_nuevo_nombre ||
+                                'Plan nuevo'}
+
+                              {' ('}
+
+                              {formatearDinero(
+                                evento.plan_nuevo_precio ||
+                                0
+                              )}
+
+                              {')'}
+
+                            </p>
+
+                            <p className="mt-1 text-xs text-gray-500">
+
+                              Nueva vigencia:{' '}
+
+                              {formatearFecha(
+                                evento.fecha_inicio_nueva
+                              )}
+
+                              {' → '}
+
+                              {formatearFecha(
+                                evento.fecha_fin_nueva
+                              )}
+
+                            </p>
+
+                            {evento.motivo && (
+
+                              <p className="mt-2 text-xs text-gray-600">
+                                {evento.motivo}
+                              </p>
+
+                            )}
+
+                          </div>
+
+                          <p className="text-xs text-gray-500">
+
+                            {evento.fecha_evento
+
+                              ? new Date(
+                                  evento.fecha_evento
+                                ).toLocaleString(
+                                  'es-EC',
+                                  {
+                                    timeZone:
+                                      'America/Guayaquil',
+
+                                    day:
+                                      '2-digit',
+
+                                    month:
+                                      '2-digit',
+
+                                    year:
+                                      'numeric',
+
+                                    hour:
+                                      '2-digit',
+
+                                    minute:
+                                      '2-digit',
+                                  }
+                                )
+
+                              : '-'}
+
+                          </p>
+
+                        </div>
+
+                      </div>
+
+                    )
+                  )}
+
+                </div>
+
+              )}
+
+            </div>
+
+            {pagoCorreccion && (
+              <form
+                onSubmit={guardarCorreccionPago}
+                className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-gray-900">Corregir pago</h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      El monto se mantiene en {formatearDinero(pagoCorreccion.monto)}. Solo se corrigen los datos del medio de pago.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setPagoCorreccion(null)}
+                    className="rounded-lg p-2 text-gray-500 transition hover:bg-white"
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Método correcto
+                    </label>
+                    <select
+                      value={formCorreccionPago.metodo_pago}
+                      onChange={(e) => actualizarCorreccionPago('metodo_pago', e.target.value)}
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                    >
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="tarjeta">Tarjeta</option>
+                      <option value="canje">Canje</option>
+                    </select>
+                  </div>
+
+                  {formCorreccionPago.metodo_pago === 'transferencia' && (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Comprobante
+                        </label>
+                        <input
+                          value={formCorreccionPago.numero_comprobante}
+                          onChange={(e) => actualizarCorreccionPago('numero_comprobante', e.target.value)}
+                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Banco de origen
+                        </label>
+                        <input
+                          value={formCorreccionPago.banco_origen}
+                          onChange={(e) => actualizarCorreccionPago('banco_origen', e.target.value)}
+                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {formCorreccionPago.metodo_pago === 'tarjeta' && (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Tipo de tarjeta
+                        </label>
+                        <select
+                          value={formCorreccionPago.tipo_tarjeta}
+                          onChange={(e) => actualizarCorreccionPago('tipo_tarjeta', e.target.value)}
+                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                        >
+                          <option value="">Seleccionar tarjeta</option>
+                          {tiposTarjeta.map((tarjeta) => (
+                            <option key={tarjeta.value} value={tarjeta.value}>
+                              {tarjeta.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Comprobante
+                        </label>
+                        <input
+                          value={formCorreccionPago.numero_comprobante}
+                          onChange={(e) => actualizarCorreccionPago('numero_comprobante', e.target.value)}
+                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Nota del pago
+                    </label>
+                    <textarea
+                      value={formCorreccionPago.notas}
+                      onChange={(e) => actualizarCorreccionPago('notas', e.target.value)}
+                      className="min-h-20 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                      placeholder={formCorreccionPago.metodo_pago === 'canje' ? 'Describe el canje' : 'Opcional'}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Motivo de la corrección *
+                    </label>
+                    <textarea
+                      value={formCorreccionPago.motivo}
+                      onChange={(e) => actualizarCorreccionPago('motivo', e.target.value)}
+                      className="min-h-20 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                      placeholder="Ej: Se registró efectivo por error; el cliente pagó por transferencia."
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={guardandoCorreccionPago}
+                  className="mt-4 rounded-xl bg-black px-4 py-3 text-sm font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {guardandoCorreccionPago ? 'Guardando...' : 'Guardar corrección'}
+                </button>
+              </form>
+            )}
+
+            <div className="mt-6 border-t border-gray-200 pt-5">
+              <h3 className="text-sm font-bold text-gray-900">Auditoría</h3>
+
+              {cargandoHistorialPagos ? (
+                <p className="mt-3 text-sm text-gray-500">Cargando historial...</p>
+              ) : historialPagos.length === 0 ? (
+                <p className="mt-3 text-sm text-gray-500">Sin cambios históricos registrados.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {historialPagos.map((evento) => {
+                    const datos = evento.datos_nuevos || evento.datos_anteriores || {}
+
+                    return (
+                      <div
+                        key={evento.id}
+                        className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm"
+                      >
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="font-bold text-gray-900">
+                            {evento.accion} · {formatearDinero(datos.monto || 0)} · <span className="capitalize">{datos.metodo_pago || '-'}</span>
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {evento.fecha_evento ? new Date(evento.fecha_evento).toLocaleString('es-EC', {
+                              timeZone: 'America/Guayaquil',
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }) : '-'}
+                          </p>
+                        </div>
+
+                        {evento.motivo && (
+                          <p className="mt-1 text-xs text-gray-600">
+                            {evento.motivo}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MAK_RESUMEN_MEMBRESIAS_SOLO_ADMIN */}
       {perfil?.rol !== 'empleado' && (
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-6 md:gap-4">
@@ -2308,19 +4058,33 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
               />
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Duración en días
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={formPlan.duracion_dias}
-                onChange={(e) => actualizarPlan('duracion_dias', e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
-                placeholder="Ej: 30"
-              />
-            </div>
+            {(
+              !formPlan.es_promocion ||
+              formPlan.modalidad_vigencia ===
+                'duracion'
+            ) && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Duración en días
+                </label>
+
+                <input
+                  type="number"
+                  min="1"
+                  value={
+                    formPlan.duracion_dias
+                  }
+                  onChange={(e) =>
+                    actualizarPlan(
+                      'duracion_dias',
+                      e.target.value
+                    )
+                  }
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                  placeholder="Ej: 30"
+                />
+              </div>
+            )}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -2340,15 +4104,167 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Tipo de plan
               </label>
+
               <select
-                value={formPlan.es_promocion ? 'promo' : 'normal'}
-                onChange={(e) => actualizarPlan('es_promocion', e.target.value === 'promo')}
+                value={
+                  formPlan.es_promocion
+                    ? 'promo'
+                    : 'normal'
+                }
+                onChange={(e) =>
+                  actualizarPlan(
+                    'es_promocion',
+                    e.target.value ===
+                      'promo'
+                  )
+                }
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
               >
-                <option value="normal">Plan normal</option>
-                <option value="promo">Plan promocional</option>
+                <option value="normal">
+                  Plan normal
+                </option>
+
+                <option value="promo">
+                  Plan promocional
+                </option>
               </select>
             </div>
+
+            {formPlan.es_promocion &&
+              formPlan.modalidad_vigencia ===
+                'fecha_fija' && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Disponible desde
+                    </label>
+
+                    <input
+                      type="date"
+                      value={
+                        formPlan
+                          .vigencia_desde
+                      }
+                      onChange={(e) =>
+                        actualizarPlan(
+                          'vigencia_desde',
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Finaliza el
+                    </label>
+
+                    <input
+                      type="date"
+                      value={
+                        formPlan
+                          .vigencia_hasta
+                      }
+                      min={
+                        formPlan
+                          .vigencia_desde ||
+                        undefined
+                      }
+                      onChange={(e) =>
+                        actualizarPlan(
+                          'vigencia_hasta',
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                    />
+                  </div>
+
+                  <div className="md:col-span-5 rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
+
+                    {formPlan.vigencia_desde &&
+                    formPlan.vigencia_hasta
+                      ? (
+                          <>
+                            Esta promoción estará disponible del{' '}
+
+                            <strong>
+                              {formatearFecha(
+                                formPlan
+                                  .vigencia_desde
+                              )}
+                            </strong>
+
+                            {' '}al{' '}
+
+                            <strong>
+                              {formatearFecha(
+                                formPlan
+                                  .vigencia_hasta
+                              )}
+                            </strong>.
+
+                            {' '}Duración máxima:{' '}
+
+                            <strong>
+                              {calcularDiasInclusive(
+                                formPlan
+                                  .vigencia_desde,
+
+                                formPlan
+                                  .vigencia_hasta
+                              )}{' '}
+                              días
+                            </strong>.
+
+                            {' '}Cada socio que ingrese durante la promoción terminará su membresía exactamente el{' '}
+
+                            <strong>
+                              {formatearFecha(
+                                formPlan
+                                  .vigencia_hasta
+                              )}
+                            </strong>.
+                          </>
+                        )
+                      : 'Selecciona en el calendario la fecha inicial y la fecha final de la promoción.'}
+
+                  </div>
+                </>
+              )}
+
+            {formPlan.es_promocion &&
+              formPlan.modalidad_vigencia ===
+                'duracion' &&
+              editandoPlanId && (
+
+                <div className="md:col-span-5 rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+
+                  <p className="font-semibold">
+                    Promoción histórica por duración
+                  </p>
+
+                  <p className="mt-1">
+                    Este plan fue creado antes de implementar promociones por fecha fija. Puedes conservarlo sin alterar su historial o convertirlo para futuras ventas.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      actualizarPlan(
+                        'modalidad_vigencia',
+                        'fecha_fija'
+                      )
+                    }
+                    className="mt-3 rounded-xl border border-yellow-300 bg-white px-4 py-2 text-sm font-semibold text-yellow-900 transition hover:bg-yellow-100"
+                  >
+                    Convertir a fechas específicas
+                  </button>
+
+                </div>
+
+              )}
 
             <div className="md:col-span-5">
               <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -2640,7 +4556,8 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
               <select
                 value={formMembresia.miembro_id}
                 onChange={(e) => actualizarMembresia('miembro_id', e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                disabled={esRenovacionFormulario}
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-600"
               >
                 <option value="">Seleccionar miembro</option>
                 {miembrosActivos.map((miembro) => (
@@ -2655,22 +4572,99 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Plan
               </label>
-              <select
-                value={formMembresia.plan_id}
-                onChange={(e) => actualizarMembresia('plan_id', e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
-              >
-                <option value="">Seleccionar plan</option>
-                {planesDisponiblesVenta.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.nombre} - {formatearDinero(plan.precio)} - {plan.duracion_dias} días
-                    {plan.es_promocion ? ' - PROMO' : ''}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-500">
-                Los planes promocionales solo aparecerán aquí cuando estén activos.
-              </p>
+
+              {mantienePlanHistoricoFormulario ? (
+
+                <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
+
+                  <p className="text-sm font-bold text-gray-900">
+                    {formMembresia.plan_historico_nombre}
+                  </p>
+
+                  <p className="mt-1 text-xs font-semibold text-teal-800">
+                    Precio histórico conservado:{' '}
+                    {formatearDinero(
+                      formMembresia
+                        .plan_historico_precio ||
+                      0
+                    )}
+                  </p>
+
+                </div>
+
+              ) : (
+
+                <>
+
+                  <select
+                    value={formMembresia.plan_id}
+                    onChange={(e) =>
+                      actualizarMembresia(
+                        'plan_id',
+                        e.target.value
+                      )
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                  >
+
+                    <option value="">
+                      {esRenovacionFormulario
+                        ? 'Seleccionar nuevo plan'
+                        : 'Seleccionar plan'}
+                    </option>
+
+                    {planesDisponiblesVenta.map(
+                      (plan) => (
+
+                        <option
+                          key={plan.id}
+                          value={plan.id}
+                        >
+                          {plan.nombre}
+                          {' - '}
+                          {formatearDinero(
+                            plan.precio
+                          )}
+
+                          {esPlanFechaFija(plan)
+                            ? (
+                                <>
+                                  {' - hasta '}
+                                  {formatearFecha(
+                                    plan.vigencia_hasta
+                                  )}
+                                </>
+                              )
+                            : (
+                                <>
+                                  {' - '}
+                                  {plan.duracion_dias}
+                                  {' días'}
+                                </>
+                              )}
+
+                          {plan.es_promocion
+                            ? ' - PROMO'
+                            : ''}
+                        </option>
+
+                      )
+                    )}
+
+                  </select>
+
+                  <p className="mt-1 text-xs text-gray-500">
+
+                    {esRenovacionFormulario
+                      ? 'Al cambiar de plan se aplican el precio y condiciones vigentes del plan seleccionado.'
+                      : 'Los planes promocionales solo aparecerán aquí cuando estén activos.'}
+
+                  </p>
+
+                </>
+
+              )}
+
             </div>
 
             <div>
@@ -2681,38 +4675,54 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
                 type="date"
                 value={formMembresia.fecha_inicio}
                 onChange={(e) => actualizarMembresia('fecha_inicio', e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
-              />
-            </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Monto pagado
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={formMembresia.monto}
-                onChange={(e) => actualizarMembresia('monto', e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
-                placeholder="Ej: 25"
-              />
-            </div>
+                min={
+                  esPlanFechaFija(
+                    planActualFormulario
+                  )
+                    ? planActualFormulario
+                        .vigencia_desde
+                    : undefined
+                }
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Método de pago
-              </label>
-              <select
-                value={formMembresia.metodo_pago}
-                onChange={(e) => actualizarMembresia('metodo_pago', e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
-              >
-                <option value="efectivo">Efectivo</option>
-                <option value="transferencia">Transferencia</option>
-                <option value="tarjeta">Tarjeta</option>
-              </select>
+                max={
+                  esPlanFechaFija(
+                    planActualFormulario
+                  )
+                    ? planActualFormulario
+                        .vigencia_hasta
+                    : undefined
+                }
+
+                disabled={
+                  esRenovacionFormulario
+                }
+
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-600"
+              />
+
+              {!esRenovacionFormulario &&
+                esPlanFechaFija(
+                  planActualFormulario
+                ) && (
+
+                  <p className="mt-1 text-xs font-semibold text-purple-700">
+                    Esta promoción finaliza el{' '}
+                    {formatearFecha(
+                      planActualFormulario
+                        .vigencia_hasta
+                    )}.
+                  </p>
+
+                )}
+
+              {esRenovacionFormulario && (
+
+                <p className="mt-1 text-xs text-gray-500">
+                  La fecha de inicio de una renovación se calcula automáticamente para no perder días pagados.
+                </p>
+
+              )}
             </div>
 
             <div>
@@ -2720,35 +4730,42 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
                 Próxima renovación
               </label>
               <div className="flex min-h-[46px] items-center rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
-                {formMembresia.plan_id
+                {planCalculoFormulario
                   ? formatearFecha(
                       calcularFechaRenovacionPlan(
                         formMembresia.fecha_inicio,
-                        planes.find(
-                          (plan) =>
-                            plan.id ===
-                            formMembresia.plan_id
-                        )
+                        planCalculoFormulario
                       )
                     )
                   : 'Selecciona un plan'}
               </div>
             </div>
 
-            <CamposDetallePago
-              valores={formMembresia}
-              actualizar={actualizarMembresia}
-            />
+            <div className="md:col-span-3">
+              <label className="mb-2 block text-sm font-bold text-gray-900">
+                Formas de pago
+              </label>
+              <PagosMembresiaEditor
+                pagos={formMembresia.pagos}
+                actualizarPago={actualizarPagoMembresia}
+                agregarPago={agregarPagoMembresia}
+                eliminarPago={eliminarPagoMembresia}
+                permitirCanje={esAdminPagos}
+                precioPlan={
+                  precioFormularioMembresia
+                }
+              />
+            </div>
 
             <div className="md:col-span-3">
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                Notas del pago
+                Nota general de la operación
               </label>
               <textarea
                 value={formMembresia.notas}
                 onChange={(e) => actualizarMembresia('notas', e.target.value)}
-                className="min-h-24 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
-                placeholder="Ej: Pago completo de mensualidad"
+                className="min-h-20 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                placeholder="Opcional. Ej: Renovación registrada en recepción"
               />
             </div>
 
@@ -2960,8 +4977,27 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
                   <div className="text-right">
                     <p className="text-sm text-gray-500">Duración</p>
                     <p className="text-lg font-bold text-gray-900">
-                      {plan.duracion_dias} días
+                      {esPlanFechaFija(plan)
+                        ? `Hasta ${formatearFecha(
+                            plan.vigencia_hasta
+                          )}`
+                        : `${plan.duracion_dias} días`}
                     </p>
+
+                    {esPlanFechaFija(plan) && (
+                      <p className="mt-1 text-xs font-semibold text-gray-500">
+
+                        {obtenerEstadoPromoFecha(plan) ===
+                        'programada'
+                          ? 'Programada'
+
+                          : obtenerEstadoPromoFecha(plan) ===
+                            'finalizada'
+                            ? 'Finalizada'
+                            : 'Vigente'}
+
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -3210,6 +5246,18 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
                         </button>
                       )}
 
+                      {esAdminPagos && (
+                        <button
+                          type="button"
+                          onClick={() => abrirHistorialPagos(membresia)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                          title="Historial de membresía"
+                        >
+                          <BadgeDollarSign size={17} />
+                          Historial
+                        </button>
+                      )}
+
                       <button
                         onClick={() => renovarMembresia(membresia)}
                         className="rounded-lg border border-blue-100 p-2 text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
@@ -3374,6 +5422,17 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
                                 title="Ampliar a mensual fidelización"
                               >
                                 <ArrowUpRight size={17} />
+                              </button>
+                            )}
+
+                            {esAdminPagos && (
+                              <button
+                                type="button"
+                                onClick={() => abrirHistorialPagos(membresia)}
+                                className="rounded-lg p-2 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                                title="Historial de membresía"
+                              >
+                                <BadgeDollarSign size={17} />
                               </button>
                             )}
 
