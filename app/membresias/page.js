@@ -29,6 +29,35 @@ const tiposTarjeta = [
   { value: 'american_express', label: 'American Express' },
 ]
 
+// MAK_CONFIG_PAGOS_SOCIOS_ADMIN_V1
+const configPagosSociosInicial = {
+  efectivo_activo: true,
+  efectivo_mensaje:
+    'Realiza tu pago directamente en recepción de MAK FITNESS.',
+
+  transferencia_activa: false,
+  banco: '',
+  tipo_cuenta: 'ahorros',
+  numero_cuenta: '',
+  titular_cuenta: '',
+  identificacion_titular: '',
+  transferencia_aviso_comprobante:
+    'Por seguridad, conserva tu comprobante de pago. Puedes enviarlo al WhatsApp de MAK FITNESS.',
+
+  whatsapp_gym: '0991183054',
+
+  tarjeta_activa: false,
+  tarjeta_mensaje:
+    'Solicita tu link de pago para tarjeta de débito o crédito.',
+
+  tarjeta_recargo_mensaje:
+    'Los pagos con tarjeta tienen un recargo adicional correspondiente al procesamiento bancario. El valor final será informado antes de generar el link de pago.',
+
+  tarjeta_solicitud_mensaje:
+    'Quiero renovar mi membresía y pagar con tarjeta. Por favor envíame el link de pago.',
+}
+
+
 const planInicial = {
   nombre: '',
   descripcion: '',
@@ -1167,6 +1196,28 @@ export default function MembresiasPage() {
   const [mostrarUpgrade, setMostrarUpgrade] = useState(false)
   const [mostrarEditarMembresia, setMostrarEditarMembresia] = useState(false)
 
+  const [
+    mostrarConfigPagosSocios,
+    setMostrarConfigPagosSocios,
+  ] = useState(false)
+
+  const [
+    configPagosSocios,
+    setConfigPagosSocios,
+  ] = useState(
+    configPagosSociosInicial
+  )
+
+  const [
+    cargandoConfigPagosSocios,
+    setCargandoConfigPagosSocios,
+  ] = useState(false)
+
+  const [
+    guardandoConfigPagosSocios,
+    setGuardandoConfigPagosSocios,
+  ] = useState(false)
+
   const [editandoPlanId, setEditandoPlanId] = useState(null)
   const [editandoMembresiaId, setEditandoMembresiaId] = useState(null)
   const [membresiaSeleccionada, setMembresiaSeleccionada] = useState(null)
@@ -1468,7 +1519,202 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
     setMostrarInscripcion(false)
     setMostrarUpgrade(false)
     setMostrarEditarMembresia(false)
+    setMostrarConfigPagosSocios(false)
   }
+
+  function actualizarConfigPagosSocios(
+    campo,
+    valor
+  ) {
+    setConfigPagosSocios(
+      (actual) => ({
+        ...actual,
+        [campo]: valor,
+      })
+    )
+  }
+
+
+  async function abrirConfigPagosSocios() {
+    if (!esAdminPagos) {
+      setError(
+        'No tienes permisos para administrar los métodos de pago de los socios.'
+      )
+      return
+    }
+
+    setCargandoConfigPagosSocios(true)
+    setError('')
+    setMensaje('')
+
+    try {
+      const {
+        data,
+        error: errorConfig,
+      } = await supabase.rpc(
+        'obtener_config_pagos_admin'
+      )
+
+      if (errorConfig) {
+        throw new Error(
+          errorConfig.message
+        )
+      }
+
+      setConfigPagosSocios({
+        ...configPagosSociosInicial,
+        ...(data || {}),
+      })
+
+      cerrarFormularios()
+      setMostrarConfigPagosSocios(true)
+
+    } catch (errorConfig) {
+      setError(
+        errorConfig.message
+      )
+
+    } finally {
+      setCargandoConfigPagosSocios(false)
+    }
+  }
+
+
+  function cerrarConfigPagosSocios() {
+    setMostrarConfigPagosSocios(false)
+    setError('')
+  }
+
+
+  async function guardarConfigPagosSocios(
+    evento
+  ) {
+    evento.preventDefault()
+
+    if (!esAdminPagos) {
+      return
+    }
+
+    setGuardandoConfigPagosSocios(true)
+    setError('')
+    setMensaje('')
+
+    try {
+      const {
+        error: errorGuardar,
+      } = await supabase.rpc(
+        'guardar_config_pagos_admin',
+        {
+          p_efectivo_activo:
+            Boolean(
+              configPagosSocios
+                .efectivo_activo
+            ),
+
+          p_efectivo_mensaje:
+            String(
+              configPagosSocios
+                .efectivo_mensaje || ''
+            ).trim(),
+
+          p_transferencia_activa:
+            Boolean(
+              configPagosSocios
+                .transferencia_activa
+            ),
+
+          p_banco:
+            String(
+              configPagosSocios
+                .banco || ''
+            ).trim(),
+
+          p_tipo_cuenta:
+            configPagosSocios
+              .tipo_cuenta ||
+            'ahorros',
+
+          p_numero_cuenta:
+            String(
+              configPagosSocios
+                .numero_cuenta || ''
+            ).trim(),
+
+          p_titular_cuenta:
+            String(
+              configPagosSocios
+                .titular_cuenta || ''
+            ).trim(),
+
+          p_identificacion_titular:
+            String(
+              configPagosSocios
+                .identificacion_titular || ''
+            ).trim(),
+
+          p_transferencia_aviso_comprobante:
+            String(
+              configPagosSocios
+                .transferencia_aviso_comprobante ||
+              ''
+            ).trim(),
+
+          p_whatsapp_gym:
+            String(
+              configPagosSocios
+                .whatsapp_gym || ''
+            ).trim(),
+
+          p_tarjeta_activa:
+            Boolean(
+              configPagosSocios
+                .tarjeta_activa
+            ),
+
+          p_tarjeta_mensaje:
+            String(
+              configPagosSocios
+                .tarjeta_mensaje || ''
+            ).trim(),
+
+          p_tarjeta_recargo_mensaje:
+            String(
+              configPagosSocios
+                .tarjeta_recargo_mensaje ||
+              ''
+            ).trim(),
+
+          p_tarjeta_solicitud_mensaje:
+            String(
+              configPagosSocios
+                .tarjeta_solicitud_mensaje ||
+              ''
+            ).trim(),
+        }
+      )
+
+      if (errorGuardar) {
+        throw new Error(
+          errorGuardar.message
+        )
+      }
+
+      setMostrarConfigPagosSocios(false)
+
+      setMensaje(
+        'Métodos de pago para socios actualizados correctamente.'
+      )
+
+    } catch (errorGuardar) {
+      setError(
+        errorGuardar.message
+      )
+
+    } finally {
+      setGuardandoConfigPagosSocios(false)
+    }
+  }
+
 
   function abrirNuevoPlan() {
     if (!esDueno) {
@@ -3253,6 +3499,25 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
             Inscripción
           </button>
 
+          {esAdminPagos && (
+            <button
+              type="button"
+              onClick={
+                abrirConfigPagosSocios
+              }
+              disabled={
+                cargandoConfigPagosSocios
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <CreditCard size={18} />
+
+              {cargandoConfigPagosSocios
+                ? 'Cargando...'
+                : 'Pagos socios'}
+            </button>
+          )}
+
           <button
             onClick={abrirNuevaMembresia}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800"
@@ -4008,6 +4273,486 @@ const [pestanaPlanes, setPestanaPlanes] = useState('activos')
           </h2>
         </div>
       </div>
+      )}
+
+      {esAdminPagos &&
+        mostrarConfigPagosSocios && (
+
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+          onClick={
+            cerrarConfigPagosSocios
+          }
+        >
+
+          <div
+            className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl md:p-6"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+
+            <div className="flex items-start justify-between gap-4">
+
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Configurar pagos de socios
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Define los métodos de pago que aparecerán en MAK Socios.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  cerrarConfigPagosSocios
+                }
+                className="rounded-xl p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+              >
+                <X size={20} />
+              </button>
+
+            </div>
+
+
+            <form
+              onSubmit={
+                guardarConfigPagosSocios
+              }
+              className="mt-6 space-y-5"
+            >
+
+              <section className="rounded-2xl border border-gray-200 p-4">
+
+                <label className="flex cursor-pointer items-center justify-between gap-4">
+
+                  <div>
+                    <p className="font-bold text-gray-900">
+                      Efectivo
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-500">
+                      Pago directamente en recepción.
+                    </p>
+                  </div>
+
+                  <input
+                    type="checkbox"
+                    checked={
+                      Boolean(
+                        configPagosSocios
+                          .efectivo_activo
+                      )
+                    }
+                    onChange={(e) =>
+                      actualizarConfigPagosSocios(
+                        'efectivo_activo',
+                        e.target.checked
+                      )
+                    }
+                    className="h-5 w-5"
+                  />
+
+                </label>
+
+
+                {configPagosSocios
+                  .efectivo_activo && (
+
+                  <div className="mt-4">
+
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Mensaje para el socio
+                    </label>
+
+                    <textarea
+                      rows={2}
+                      value={
+                        configPagosSocios
+                          .efectivo_mensaje
+                      }
+                      onChange={(e) =>
+                        actualizarConfigPagosSocios(
+                          'efectivo_mensaje',
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                    />
+
+                  </div>
+                )}
+
+              </section>
+
+
+              <section className="rounded-2xl border border-gray-200 p-4">
+
+                <label className="flex cursor-pointer items-center justify-between gap-4">
+
+                  <div>
+                    <p className="font-bold text-gray-900">
+                      Transferencia bancaria
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-500">
+                      Muestra tus datos bancarios en MAK Socios.
+                    </p>
+                  </div>
+
+                  <input
+                    type="checkbox"
+                    checked={
+                      Boolean(
+                        configPagosSocios
+                          .transferencia_activa
+                      )
+                    }
+                    onChange={(e) =>
+                      actualizarConfigPagosSocios(
+                        'transferencia_activa',
+                        e.target.checked
+                      )
+                    }
+                    className="h-5 w-5"
+                  />
+
+                </label>
+
+
+                {configPagosSocios
+                  .transferencia_activa && (
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Banco
+                      </label>
+
+                      <input
+                        value={
+                          configPagosSocios
+                            .banco
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'banco',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                        placeholder="Ej: Banco Pichincha"
+                      />
+                    </div>
+
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Tipo de cuenta
+                      </label>
+
+                      <select
+                        value={
+                          configPagosSocios
+                            .tipo_cuenta
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'tipo_cuenta',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      >
+                        <option value="ahorros">
+                          Ahorros
+                        </option>
+
+                        <option value="corriente">
+                          Corriente
+                        </option>
+                      </select>
+                    </div>
+
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Número de cuenta
+                      </label>
+
+                      <input
+                        value={
+                          configPagosSocios
+                            .numero_cuenta
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'numero_cuenta',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      />
+                    </div>
+
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Titular
+                      </label>
+
+                      <input
+                        value={
+                          configPagosSocios
+                            .titular_cuenta
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'titular_cuenta',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      />
+                    </div>
+
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Identificación del titular
+                      </label>
+
+                      <input
+                        value={
+                          configPagosSocios
+                            .identificacion_titular
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'identificacion_titular',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      />
+                    </div>
+
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        WhatsApp MAK FITNESS
+                      </label>
+
+                      <input
+                        value={
+                          configPagosSocios
+                            .whatsapp_gym
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'whatsapp_gym',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                        placeholder="0991183054"
+                      />
+                    </div>
+
+
+                    <div className="md:col-span-2">
+
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Aviso sobre comprobante
+                      </label>
+
+                      <textarea
+                        rows={3}
+                        value={
+                          configPagosSocios
+                            .transferencia_aviso_comprobante
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'transferencia_aviso_comprobante',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      />
+
+                    </div>
+
+                  </div>
+                )}
+
+              </section>
+
+
+              <section className="rounded-2xl border border-gray-200 p-4">
+
+                <label className="flex cursor-pointer items-center justify-between gap-4">
+
+                  <div>
+                    <p className="font-bold text-gray-900">
+                      Tarjeta de débito o crédito
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-500">
+                      El socio solicitará el link de pago por WhatsApp.
+                    </p>
+                  </div>
+
+                  <input
+                    type="checkbox"
+                    checked={
+                      Boolean(
+                        configPagosSocios
+                          .tarjeta_activa
+                      )
+                    }
+                    onChange={(e) =>
+                      actualizarConfigPagosSocios(
+                        'tarjeta_activa',
+                        e.target.checked
+                      )
+                    }
+                    className="h-5 w-5"
+                  />
+
+                </label>
+
+
+                {configPagosSocios
+                  .tarjeta_activa && (
+
+                  <div className="mt-4 space-y-4">
+
+                    <div>
+
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Texto de la opción
+                      </label>
+
+                      <textarea
+                        rows={2}
+                        value={
+                          configPagosSocios
+                            .tarjeta_mensaje
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'tarjeta_mensaje',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      />
+
+                    </div>
+
+
+                    <div>
+
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Aviso de recargo
+                      </label>
+
+                      <textarea
+                        rows={3}
+                        value={
+                          configPagosSocios
+                            .tarjeta_recargo_mensaje
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'tarjeta_recargo_mensaje',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm outline-none focus:border-amber-500"
+                      />
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        No coloques un porcentaje si el banco o procesador puede variarlo.
+                      </p>
+
+                    </div>
+
+
+                    <div>
+
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Mensaje que enviará el socio
+                      </label>
+
+                      <textarea
+                        rows={3}
+                        value={
+                          configPagosSocios
+                            .tarjeta_solicitud_mensaje
+                        }
+                        onChange={(e) =>
+                          actualizarConfigPagosSocios(
+                            'tarjeta_solicitud_mensaje',
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                      />
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        MAK Socios añadirá automáticamente el nombre y código del socio.
+                      </p>
+
+                    </div>
+
+                  </div>
+                )}
+
+              </section>
+
+
+              <div className="flex flex-col gap-2 border-t border-gray-100 pt-4 sm:flex-row">
+
+                <button
+                  type="submit"
+                  disabled={
+                    guardandoConfigPagosSocios
+                  }
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Save size={18} />
+
+                  {guardandoConfigPagosSocios
+                    ? 'Guardando...'
+                    : 'Guardar configuración'}
+                </button>
+
+
+                <button
+                  type="button"
+                  onClick={
+                    cerrarConfigPagosSocios
+                  }
+                  disabled={
+                    guardandoConfigPagosSocios
+                  }
+                  className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
+
+        </div>
       )}
 
       {esDueno && mostrarPlan && (
