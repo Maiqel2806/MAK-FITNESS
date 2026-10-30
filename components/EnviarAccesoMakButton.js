@@ -23,22 +23,7 @@ function telefonoEcuador(valor) {
 }
 
 function enlacePublico() {
-  const base =
-    process.env.NEXT_PUBLIC_MAK_CLIENTES_URL ||
-    'https://mak-socios.vercel.app'
-
-  try {
-    const url = new URL(base)
-
-    if (url.protocol !== 'https:') {
-      throw new Error('URL inválida')
-    }
-
-    return new URL('/login', url.origin).toString()
-  } catch (error) {
-    console.error('URL MAK Clientes inválida:', error)
-    return ''
-  }
+  return 'https://mak-socios-app.vercel.app/login'
 }
 
 export default function EnviarAccesoMakButton({
