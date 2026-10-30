@@ -1794,13 +1794,41 @@ function MiembrosContenido({ perfil }) {
         return
       }
 
+      // MAK_AUTO_ACCESO_V1: habilitar la app solo tras registrar la membresia.
+      let errorAccesoMak = ''
+      try {
+        const { data: datosSesion, error: errorSesion } =
+          await supabase.auth.getSession()
+        const tokenMak = datosSesion?.session?.access_token
+        if (errorSesion || !tokenMak) {
+          throw new Error('Sesion administrativa no disponible.')
+        }
+        const respMak = await fetch('/api/admin/provisionar-socio', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokenMak}`
+          },
+          body: JSON.stringify({ miembro_id: miembroId })
+        })
+        const accesoMak = await respMak.json().catch(() => ({}))
+        if (!respMak.ok || !accesoMak.ok) {
+          throw new Error(accesoMak.error || 'Error al habilitar MAK Clientes.')
+        }
+      } catch (errorAcceso) {
+        errorAccesoMak = errorAcceso?.message || 'Error desconocido.'
+        console.error('MAK CLIENTES NUEVO SOCIO:', errorAccesoMak)
+      }
+
       await cargarDatos()
-
       limpiarFormulario()
-
-      setMensaje(
-        'Miembro creado exitosamente.'
+      setMensaje(errorAccesoMak
+        ? 'Socio y membresia registrados. Acceso MAK Clientes pendiente.'
+        : 'Miembro creado exitosamente. Acceso MAK Clientes habilitado.'
       )
+      if (errorAccesoMak) {
+        setError(`La membresia esta guardada. Falta habilitar MAK Clientes: ${errorAccesoMak}`)
+      }
 
       setGuardando(false)
     } catch (error) {
