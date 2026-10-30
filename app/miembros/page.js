@@ -1,5 +1,6 @@
 'use client'
 
+import EnviarAccesoMakButton from '@/components/EnviarAccesoMakButton'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { usePerfil } from '@/components/UserContext'
@@ -775,6 +776,10 @@ function MiembrosContenido({ perfil }) {
     )
   const esAdminPagos = ['dueno', 'administrador'].includes(perfil?.rol)
 
+  // MAK_ACCESO_SOCIOS_ADMIN_V1
+  const puedeGestionarAccesoSocios =
+    perfil?.rol === 'dueno'
+
   // MAK_PERMISOS_EMPLEADOS_ESTABLE_V3
   const [
     miembros,
@@ -873,6 +878,21 @@ function MiembrosContenido({ perfil }) {
   const [
     errorDetalle,
     setErrorDetalle,
+  ] = useState('')
+
+  const [
+    accesoSocios,
+    setAccesoSocios,
+  ] = useState(null)
+
+  const [
+    cargandoAccesoSocios,
+    setCargandoAccesoSocios,
+  ] = useState(false)
+
+  const [
+    errorAccesoSocios,
+    setErrorAccesoSocios,
   ] = useState('')
 
   const [
@@ -2089,11 +2109,80 @@ function MiembrosContenido({ perfil }) {
     }
   }
 
+  async function cargarAccesoSocios(miembroId) {
+    setCargandoAccesoSocios(true)
+    setErrorAccesoSocios('')
+    setAccesoSocios(null)
+
+    try {
+      const {
+        data: sesionData,
+      } =
+        await supabase.auth.getSession()
+
+      const token =
+        sesionData?.session?.access_token ||
+        ''
+
+      if (!token) {
+        throw new Error(
+          'Sesión administrativa no válida.'
+        )
+      }
+
+      const respuesta =
+        await fetch(
+          `/api/admin/socios-app?miembro_id=${encodeURIComponent(
+            miembroId
+          )}`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        )
+
+      const data =
+        await respuesta.json()
+
+      if (!respuesta.ok) {
+        throw new Error(
+          data.error ||
+            'No se pudo consultar el acceso MAK Socios.'
+        )
+      }
+
+      setAccesoSocios(data)
+
+    } catch (errorConsulta) {
+      setAccesoSocios(null)
+
+      setErrorAccesoSocios(
+        errorConsulta?.message ||
+          'No se pudo consultar el acceso MAK Socios.'
+      )
+
+    } finally {
+      setCargandoAccesoSocios(false)
+    }
+  }
+
+
   async function abrirDetalleMiembro(miembro) {
     setDetalleMiembro(miembro)
     setDetalleMembresia(null)
     setErrorDetalle('')
     setCargandoDetalle(true)
+
+    setAccesoSocios(null)
+    setErrorAccesoSocios('')
+
+    if (puedeGestionarAccesoSocios) {
+      void cargarAccesoSocios(
+        miembro.id
+      )
+    }
 
     const { data, error } = await supabase
       .from('membresias')
@@ -2142,6 +2231,10 @@ function MiembrosContenido({ perfil }) {
     setDetalleMembresia(null)
     setErrorDetalle('')
     setCargandoDetalle(false)
+
+    setAccesoSocios(null)
+    setCargandoAccesoSocios(false)
+    setErrorAccesoSocios('')
   }
 
   // MAK_DETALLE_PROMO_FECHA_FIJA_V1
@@ -2716,6 +2809,54 @@ function MiembrosContenido({ perfil }) {
               </div>
             </div>
 
+            {puedeGestionarAccesoSocios && (
+              <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+                <div className="flex items-center justify-between gap-4">
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Acceso MAK Socios
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-600">
+                      Cuenta para la aplicación de socios.
+                    </p>
+                  </div>
+
+                  <span
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                      cargandoAccesoSocios
+                        ? 'bg-gray-100 text-gray-600'
+                        : errorAccesoSocios
+                          ? 'bg-red-50 text-red-700'
+                          : accesoSocios?.tiene_cuenta
+                            ? accesoSocios?.cuenta?.activo
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-amber-100 text-amber-700'
+                            : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {cargandoAccesoSocios
+                      ? 'Consultando...'
+                      : errorAccesoSocios
+                        ? 'No disponible'
+                        : accesoSocios?.tiene_cuenta
+                          ? accesoSocios?.cuenta?.activo
+                            ? 'Acceso activo'
+                            : 'Cuenta inactiva'
+                          : 'Sin acceso'}
+                  </span>
+
+                </div>
+
+                {errorAccesoSocios && (
+                  <p className="mt-3 text-xs text-red-600">
+                    {errorAccesoSocios}
+                  </p>
+                )}
+              </div>
+            )}
+
             {cargandoDetalle ? (
               <div className="py-8 text-center text-sm text-gray-500">
                 Cargando membresía...
@@ -2798,6 +2939,28 @@ function MiembrosContenido({ perfil }) {
               >
                 Enviar detalles por WhatsApp
               </button>
+
+              <EnviarAccesoMakButton
+                miembroId={detalleMiembro.id}
+                nombre={[
+                  detalleMiembro.nombre,
+                  detalleMiembro.apellido
+                ].filter(Boolean).join(' ')}
+                codigo={detalleMiembro.codigo_acceso}
+                telefono={detalleMiembro.telefono}
+                disabled={
+                  !detalleMiembro.codigo_acceso ||
+                  !normalizarTelefonoWhatsAppDetalle(
+                    detalleMiembro.telefono
+                  )
+                }
+                onEnviar={(mensaje) =>
+                  abrirWhatsAppDetalle(
+                    detalleMiembro.telefono,
+                    mensaje
+                  )
+                }
+              />
 
               <button
                 type="button"
