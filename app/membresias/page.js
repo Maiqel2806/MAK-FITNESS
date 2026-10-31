@@ -1025,20 +1025,22 @@ function crearMensajeRecuperacion(membresia) {
   const nombre =
     obtenerNombreSocio(membresia)
 
-  return `*¡Es un buen momento para volver!*
+  return `¡Tenemos una promo exclusiva para que vuelvas a MAK FITNESS!
 
-Hola, *${nombre}*.
+Sabemos que a veces una pausa es necesaria, pero este es el momento perfecto para retomar tus objetivos.
 
-A veces hacemos una pausa, pero tus objetivos siguen ahí esperando por ti.
+Entrena NOVIEMBRE + DICIEMBRE por solo $40!!!
 
-En *MAK FITNESS* queremos verte nuevamente entrenando, recuperando el ritmo y avanzando con disciplina y constancia.
+Este beneficio es exclusivo para ti, para que regreses, recuperes el ritmo y cierres el año entrenando con nosotros.
 
-*Retoma hoy tu entrenamiento y vuelve a trabajar por la mejor versión de ti.*
+Presenta este mensaje en recepción y renueva tu membresía con esta promoción especial.
 
-*¡Te esperamos!*
+CUPOS LIMITADOS, ¡no dejes pasar esta oportunidad!
 
-*MAK FITNESS*
-*Entrenamiento real, para resultados reales*`
+¡Te esperamos de vuelta! 🔥
+
+MAK FITNESS
+Entrenamiento real, para resultados reales.`
 }
 
 function abrirWhatsAppMembresia(
