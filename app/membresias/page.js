@@ -1005,17 +1005,19 @@ function crearMensajeRenovacion(membresia) {
   const nombre =
     obtenerNombreSocio(membresia)
 
-  return `*¡Este mes ha sido excelente!*
+  return `*¡No detengas lo que ya empezaste!*
 
 Hola, *${nombre}*.
 
-Tu constancia, disciplina y esfuerzo ya comienzan a dar resultados, y queremos seguir acompañándote en cada paso.
+Cada semana que has entrenado demuestra tu disciplina, tu esfuerzo y el compromiso que tienes contigo mismo. 💪🏼
 
-En *MAK FITNESS* somos más que un gimnasio: queremos ser parte de tu progreso y de cada meta que alcances.
+Tu progreso no se construyó en un día, y tampoco debería detenerse ahora.
 
-*Renueva hoy tu membresía*, sigue formando parte de nuestra comunidad y continúa trabajando por ese objetivo que te propusiste.
+Sigue avanzando, sigue superándote y dale a tu cuerpo la constancia que necesita para conseguir resultados reales.
 
-*¡Vamos por más!*
+🔥 Renueva hoy tu membresía y continúa formando parte de MAK FITNESS.
+
+Lo difícil fue empezar. Ahora toca seguir.
 
 *MAK FITNESS*
 *Entrenamiento real, para resultados reales*`
