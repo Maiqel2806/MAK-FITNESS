@@ -1,6 +1,7 @@
 'use client'
 
 // MAK_ENTREGA_CAJA_V1
+// MAK_RESOLVER_ENTREGA_V1
 
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -131,13 +132,22 @@ export default function EntregaCajaPanel({
   async function confirmar() {
     if (guardando) return
 
-    if (accion !== 'cancelar' && !montoValido(importe)) {
+    if (!['cancelar', 'resolver'].includes(accion) &&
+        !montoValido(importe)) {
       setError('Ingresa un importe válido con máximo dos decimales.')
       return
     }
 
     if (accion === 'cancelar' && !observaciones.trim()) {
       setError('Indica el motivo de cancelación.')
+      return
+    }
+
+    if (accion === 'resolver' &&
+        observaciones.trim().length < 10) {
+      setError(
+        'Describe la resolución con al menos 10 caracteres.'
+      )
       return
     }
 
@@ -165,6 +175,22 @@ export default function EntregaCajaPanel({
           p_entrega_id: entregaElegida.id,
           p_efectivo: Number(importe),
           p_observaciones: observaciones.trim() || null,
+        }
+      } else if (accion === 'resolver') {
+        if (!esAdministrador || !entregaElegida?.id) {
+          throw new Error('Operación no autorizada.')
+        }
+
+        if (observaciones.trim().length < 10) {
+          throw new Error(
+            'Describe la resolución con al menos 10 caracteres.'
+          )
+        }
+
+        funcion = 'mak_resolver_entrega_caja'
+        parametros = {
+          p_entrega_id: entregaElegida.id,
+          p_resolucion: observaciones.trim(),
         }
       } else if (accion === 'cancelar') {
         if (!esAdministrador || !entregaElegida?.id) {
@@ -199,6 +225,10 @@ export default function EntregaCajaPanel({
           data?.estado === 'disputada'
             ? 'Recepción registrada con diferencias. Requiere revisión administrativa.'
             : 'Recepción confirmada correctamente.'
+        )
+      } else if (accion === 'resolver') {
+        setMensaje(
+          'Incidencia resuelta. Las diferencias originales se conservaron.'
         )
       } else {
         setMensaje('Entrega pendiente cancelada correctamente.')
@@ -260,6 +290,17 @@ export default function EntregaCajaPanel({
                 No se pueden iniciar nuevas entregas hasta que
                 administración resuelva esta situación.
               </p>
+
+              {esAdministrador && (
+                <button
+                  type="button"
+                  onClick={() => abrirModal('resolver', disputada)}
+                  disabled={cargando || guardando}
+                  className="mt-4 rounded-xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white hover:bg-black disabled:opacity-40"
+                >
+                  Resolver diferencia
+                </button>
+              )}
             </div>
           </div>
         ) : pendiente ? (
@@ -372,7 +413,15 @@ export default function EntregaCajaPanel({
                         ? '—'
                         : dinero(e.diferencia_recepcion)}
                     </td>
-                    <td>{estadoEntrega(e.estado)}</td>
+                    <td>
+                      {e.estado === 'confirmada' &&
+                      (
+                        Number(e.diferencia_entrega || 0) !== 0 ||
+                        Number(e.diferencia_recepcion || 0) !== 0
+                      )
+                        ? 'Resuelta con diferencia'
+                        : estadoEntrega(e.estado)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -403,7 +452,9 @@ export default function EntregaCajaPanel({
                 ? 'Entregar caja'
                 : accion === 'recibir'
                   ? 'Recibir caja'
-                  : 'Cancelar entrega'}
+                  : accion === 'resolver'
+                    ? 'Resolver diferencia'
+                    : 'Cancelar entrega'}
             </h3>
 
             <p className="mt-3 text-sm leading-6 text-gray-600">
@@ -411,10 +462,12 @@ export default function EntregaCajaPanel({
                 ? 'Cuenta el dinero físico que entregarás al siguiente colaborador.'
                 : accion === 'recibir'
                   ? 'Cuenta personalmente el efectivo antes de confirmar la recepción.'
-                  : 'Esta acción cancelará la entrega pendiente y conservará su historial.'}
+                  : accion === 'resolver'
+                    ? 'Documenta la revisión administrativa. Los importes y diferencias originales se conservarán.'
+                    : 'Esta acción cancelará la entrega pendiente y conservará su historial.'}
             </p>
 
-            {accion !== 'cancelar' && (
+            {!['cancelar', 'resolver'].includes(accion) && (
               <div className="mt-5">
                 <label
                   htmlFor="importe-entrega"
@@ -442,7 +495,9 @@ export default function EntregaCajaPanel({
               >
                 {accion === 'cancelar'
                   ? 'Motivo de cancelación'
-                  : 'Observaciones'}
+                  : accion === 'resolver'
+                    ? 'Resolución administrativa'
+                    : 'Observaciones'}
               </label>
               <textarea
                 id="observaciones-entrega"
@@ -469,7 +524,9 @@ export default function EntregaCajaPanel({
                   guardando ||
                   (accion === 'cancelar'
                     ? !observaciones.trim()
-                    : !montoValido(importe))
+                    : accion === 'resolver'
+                      ? observaciones.trim().length < 10
+                      : !montoValido(importe))
                 }
                 onClick={confirmar}
                 className="rounded-xl bg-gray-900 px-4 py-3 font-semibold text-white disabled:opacity-40"
