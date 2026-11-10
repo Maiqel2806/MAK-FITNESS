@@ -127,11 +127,14 @@ export default function CajaDiariaPage() {
 
       setMensaje('Caja abierta correctamente.')
     } catch (err) {
+      // MAK_FIX_ERROR_APERTURA_V1
+      // Consultar limpia los errores: mostrar el fallo después.
+      await consultar()
+      setMensaje('')
       setError(
         err.message || 'No se pudo abrir la caja.'
       )
     } finally {
-      await consultar()
       setGuardando(false)
     }
   }
