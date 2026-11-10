@@ -39,7 +39,9 @@ export default function CajaDiariaPage() {
   const perfil = usePerfil()
 
   // MAK_RESUMEN_CAJA_V1
+  // MAK_ESTADO_CAJA_HOY_V1
   const [caja, setCaja] = useState(null)
+  const [cajaHoy, setCajaHoy] = useState(null)
   const [resumen, setResumen] = useState(null)
   const [errorResumen, setErrorResumen] = useState('')
   const [fondo, setFondo] = useState('5.00')
@@ -63,6 +65,12 @@ export default function CajaDiariaPage() {
 
       if (fallo) throw fallo
 
+      const { data: estadoHoy, error: errorEstado } =
+        await supabase.rpc('mak_estado_caja_hoy')
+
+      if (errorEstado) throw errorEstado
+
+      setCajaHoy(estadoHoy)
       setCaja(data || { caja_abierta: false })
       setResumen(null)
       setErrorResumen('')
@@ -89,6 +97,7 @@ export default function CajaDiariaPage() {
         err.message || 'No se pudo consultar la caja.'
       )
       setCaja(null)
+      setCajaHoy(null)
     } finally {
       setCargando(false)
     }
@@ -109,7 +118,8 @@ export default function CajaDiariaPage() {
       cargando ||
       !esAdministrador ||
       !fondoValido ||
-      caja?.caja_abierta
+      caja?.caja_abierta ||
+      cajaHoy?.caja_registrada
     ) return
 
     setGuardando(true)
@@ -125,6 +135,7 @@ export default function CajaDiariaPage() {
 
       if (fallo) throw fallo
 
+      await consultar()
       setMensaje('Caja abierta correctamente.')
     } catch (err) {
       // MAK_FIX_ERROR_APERTURA_V1
@@ -344,6 +355,56 @@ export default function CajaDiariaPage() {
 
             </div>
           </div>
+        ) : cajaHoy?.caja_registrada &&
+            cajaHoy?.estado === 'cerrada' ? (
+          <div className="mt-6 space-y-4">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+              <p className="text-lg font-bold text-amber-900">
+                Caja del día cerrada
+              </p>
+              <p className="mt-2 text-sm text-amber-800">
+                La jornada del {cajaHoy.fecha} ya fue cerrada.
+                No se puede abrir otra caja para esta misma fecha.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-gray-200 p-5">
+                <p className="text-sm text-gray-500">
+                  Fondo inicial registrado
+                </p>
+                <p className="mt-2 text-2xl font-bold text-gray-900">
+                  {dinero(cajaHoy.fondo_inicial)}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 p-5">
+                <p className="text-sm text-gray-500">
+                  Fecha y hora del cierre
+                </p>
+                <p className="mt-2 text-lg font-bold text-gray-900">
+                  {fechaHora(cajaHoy.cerrada_at)}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 p-5">
+                <p className="text-sm text-gray-500">
+                  Efectivo contado al cierre
+                </p>
+                <p className="mt-2 text-2xl font-bold text-gray-900">
+                  {cajaHoy.efectivo_contado_cierre == null
+                    ? 'No registrado'
+                    : dinero(cajaHoy.efectivo_contado_cierre)}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-500">
+              Este cierre es compartido por administración
+              y colaboradores. La siguiente caja se abrirá
+              cuando comience una nueva fecha de operación.
+            </p>
+          </div>
         ) : caja ? (
           <div className="mt-6 space-y-5">
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
@@ -356,7 +417,7 @@ export default function CajaDiariaPage() {
               </p>
             </div>
 
-            {esAdministrador && (
+            {esAdministrador && !cajaHoy?.caja_registrada && (
               <div className="max-w-sm space-y-3">
                 <label
                   htmlFor="fondo-inicial"
