@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase'
 const supabase = createClient()
 
 // MAK_PERMISOS_EMPLEADOS_ESTABLE_V3
+// MAK_REGISTRO_COLABORADORES_V1
 
 const rutasPublicas = ['/login']
 
@@ -16,6 +17,8 @@ const rutasEmpleado = [
   '/miembros',
   '/membresias',
   '/asistencia',
+  '/registro-colaboradores',
+  '/caja/diaria', // MAK_ARQUEO_COMPARTIDO_V1
   '/inventario',
 ]
 

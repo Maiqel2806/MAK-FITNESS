@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import Link from 'next/link'
 import {
   RefreshCw,
   Plus,
@@ -474,6 +475,15 @@ export default function CajaPage() {
           <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
             Caja
           </h1>
+
+          {/* MAK_CAJA_DIARIA_V1 */}
+          <Link
+            href="/caja/diaria"
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#02AFBB] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#078F99]"
+          >
+            <DollarSign size={18} />
+            Administrar Caja Diaria
+          </Link>
           <p className="mt-2 text-sm text-gray-600 md:text-base">
             Controla ingresos, egresos, respaldos de pago y balance del gimnasio.
           </p>

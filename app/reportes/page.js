@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import {
   RefreshCw,
@@ -610,6 +611,15 @@ export default function ReportesPage() {
           </button>
         </div>
       </div>
+
+      {/* MAK_REPORTE_LABORAL_V1 */}
+      <Link
+        href="/reportes/asistencia-colaboradores"
+        className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[#02AFBB]/30 bg-[#02AFBB]/10 px-5 py-3 text-sm font-semibold text-[#07838C] transition hover:bg-[#02AFBB]/20"
+      >
+        <span>Asistencia Colaboradores</span>
+        <span aria-hidden="true">→</span>
+      </Link>
 
       {error && (
         <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

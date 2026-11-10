@@ -12,6 +12,7 @@ import {
   BarChart3,
   Dumbbell,
   ClipboardCheck,
+  Clock3,
   Menu,
   X,
   LogOut,
@@ -24,6 +25,7 @@ import { createClient } from '@/lib/supabase'
 const supabase = createClient()
 
 // MAK_PERMISOS_EMPLEADOS_ESTABLE_V3
+// MAK_REGISTRO_COLABORADORES_V1
 
 const navBase = [
   {
@@ -49,6 +51,19 @@ const navBase = [
     icon: ClipboardCheck,
     label: 'Asistencia',
     roles: ['dueno', 'administrador', 'empleado'],
+  },
+  {
+    href: '/registro-colaboradores',
+    icon: Clock3,
+    label: 'Registro Colaboradores',
+    roles: ['dueno', 'administrador', 'empleado'],
+  },
+  {
+    // MAK_ARQUEO_COMPARTIDO_V1
+    href: '/caja/diaria',
+    icon: DollarSign,
+    label: 'Caja Diaria',
+    roles: ['empleado'],
   },
   {
     href: '/clases',
