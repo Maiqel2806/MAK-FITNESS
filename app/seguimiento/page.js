@@ -48,8 +48,26 @@ function diasDesde(ts) {
   return Math.round((a - b) / 86400000)
 }
 
-function mensajeAusencia(nombre) {
-  return `Hola ${nombre}, te saludamos de MAK FITNESS. Hace unos días no te vemos por el gimnasio y queremos saber cómo estás. ¿Todo bien? ¿Hay algo en lo que podamos ayudarte para que retomes tu rutina? Estamos para apoyarte.`
+function primerNombre(nombre) {
+  const n = String(nombre || '').trim().split(/\s+/)[0] || ''
+  return n ? n.charAt(0).toUpperCase() + n.slice(1).toLowerCase() : ''
+}
+
+// Tres tonos según los días de ausencia: cercano y sencillo, cuidar el progreso, y "te extrañamos".
+function mensajeAusencia(nombre, dias) {
+  const n = primerNombre(nombre)
+  const d = Number(dias) || 0
+  const cuando = d === 1 ? '1 día' : `${d} días`
+
+  if (d <= 4) {
+    return `Hola ${n}, ¿cómo estás? Quisimos saludarte porque notamos que hace ${cuando} no vienes a entrenar. ¿Pasó algo o tuviste algún contratiempo? Cuéntanos, con gusto te ayudamos. Cuando puedas, te esperamos para retomar tu rutina, ¡tu energía hace falta por aquí! Un abrazo del equipo de MAK FITNESS.`
+  }
+
+  if (d <= 9) {
+    return `Hola ${n}, te escribimos con cariño desde MAK FITNESS. Ya son ${cuando} sin verte por el gimnasio y nos preocupa un poquito. Todo el esfuerzo que has hecho hasta ahora vale muchísimo, y retomar pronto ayuda a que ese progreso se mantenga y a que volver sea más fácil. ¿Cómo has estado? ¿Hay algo en lo que podamos apoyarte, como tus horarios o tu rutina? Sin presión, aquí estamos para ti. Te esperamos.`
+  }
+
+  return `Hola ${n}, ¿cómo estás? Hace ${cuando} que no te vemos por MAK FITNESS y la verdad te extrañamos. Sabemos que a veces la vida se complica y no pasa nada: puedes volver cuando quieras, empezando de a poco. Lo importante es que no se pierda todo lo que ya lograste. Cuéntanos qué ha pasado y vemos juntos cómo ayudarte a retomar tu ritmo; podemos ajustar tu rutina o tus horarios. Tu gimnasio y tu equipo te están esperando.`
 }
 
 export default function SeguimientoPage() {
@@ -82,7 +100,7 @@ export default function SeguimientoPage() {
   // Abre WhatsApp y deja registrado el envío para que nadie más le escriba lo mismo.
   async function enviarWhatsApp(s) {
     if (enviando[s.miembro_id]) return
-    const url = enlaceWhatsApp(s.telefono, mensajeAusencia(s.nombre))
+    const url = enlaceWhatsApp(s.telefono, mensajeAusencia(s.nombre, s.dias_sin_entrenar))
     if (!url) return
 
     setEnviando((e) => ({ ...e, [s.miembro_id]: true }))
@@ -153,7 +171,7 @@ export default function SeguimientoPage() {
             onChange={(e) => setDias(Number(e.target.value))}
             className="ml-2 rounded-xl border border-gray-300 px-3 py-2 text-sm"
           >
-            {[3, 5, 7, 10, 15, 30].map((d) => (
+            {[1, 2, 3, 5, 7, 10, 15, 30].map((d) => (
               <option key={d} value={d}>
                 {d} días
               </option>
@@ -210,6 +228,11 @@ export default function SeguimientoPage() {
                     {s.proximo_contacto ? ` · volver a contactar el ${fechaCorta(s.proximo_contacto)}` : ''}
                   </p>
                 )}
+
+                <details className="mt-3 text-sm text-gray-600">
+                  <summary className="cursor-pointer font-semibold text-[#07838C]">Ver el mensaje que se enviará</summary>
+                  <p className="mt-2 whitespace-pre-line rounded-lg bg-gray-50 p-3">{mensajeAusencia(s.nombre, s.dias_sin_entrenar)}</p>
+                </details>
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   {tieneWa ? (
