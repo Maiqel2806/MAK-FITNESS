@@ -88,7 +88,7 @@ const navBase = [
   {
     href: '/inventario',
     icon: Package,
-    label: 'Inventario',
+    label: 'Ventas e Inventario',
     roles: ['dueno', 'administrador', 'empleado'],
   },
   {
