@@ -24,6 +24,7 @@ import {
   Repeat,
   TrendingDown,
   PiggyBank,
+  Activity,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 
@@ -116,6 +117,12 @@ const navBase = [
     href: '/reportes',
     icon: BarChart3,
     label: 'Reportes',
+    roles: ['dueno', 'administrador'],
+  },
+  {
+    href: '/horas-pico',
+    icon: Activity,
+    label: 'Horas pico',
     roles: ['dueno', 'administrador'],
   },
   {
