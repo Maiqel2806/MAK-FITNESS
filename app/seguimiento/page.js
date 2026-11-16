@@ -9,6 +9,7 @@ import { enlaceWhatsApp } from '@/lib/telefono'
 
 const supabase = createClient()
 const ZONA = 'America/Guayaquil'
+const DIAS_OCULTO = 7 // tras contactar a un socio, no vuelve a salir en este plazo
 
 const RESULTADOS = [
   { v: 'contactado', t: 'Hablé con el socio' },
@@ -26,6 +27,7 @@ const CANALES = [
 const MOTIVOS = ['Viaje', 'Trabajo o estudios', 'Salud o lesión', 'Problema económico', 'Horario', 'Desmotivación', 'Cambio de gimnasio']
 
 function etiquetaResultado(v) {
+  if (v === 'mensaje_enviado') return 'Mensaje enviado'
   return RESULTADOS.find((r) => r.v === v)?.t || v
 }
 
@@ -47,7 +49,7 @@ function diasDesde(ts) {
 }
 
 function mensajeAusencia(nombre) {
-  return `Hola ${nombre}, te saludamos de MAK FITNESS. Hace unos días no te vemos por el gimnasio y queremos saber cómo estás. ¿Todo bien? ¿Hay algo en lo que podamos ayudarte para que retomes tu rutina? Estamos para apoyarte. 💪`
+  return `Hola ${nombre}, te saludamos de MAK FITNESS. Hace unos días no te vemos por el gimnasio y queremos saber cómo estás. ¿Todo bien? ¿Hay algo en lo que podamos ayudarte para que retomes tu rutina? Estamos para apoyarte.`
 }
 
 export default function SeguimientoPage() {
@@ -58,6 +60,7 @@ export default function SeguimientoPage() {
   const [mensaje, setMensaje] = useState('')
   const [ocultarContactados, setOcultarContactados] = useState(true)
   const [seleccionado, setSeleccionado] = useState(null)
+  const [enviando, setEnviando] = useState({})
 
   const cargar = useCallback(async (d) => {
     setCargando(true)
@@ -76,10 +79,47 @@ export default function SeguimientoPage() {
     cargar(dias)
   }, [dias, cargar])
 
+  // Abre WhatsApp y deja registrado el envío para que nadie más le escriba lo mismo.
+  async function enviarWhatsApp(s) {
+    if (enviando[s.miembro_id]) return
+    const url = enlaceWhatsApp(s.telefono, mensajeAusencia(s.nombre))
+    if (!url) return
+
+    setEnviando((e) => ({ ...e, [s.miembro_id]: true }))
+    setError('')
+    setMensaje('')
+
+    // Se abre la pestaña de inmediato (evita el bloqueo de ventanas del celular)
+    const ventana = window.open('', '_blank')
+
+    const { error: fallo } = await supabase.rpc('mak_registrar_seguimiento', {
+      p_miembro_id: s.miembro_id,
+      p_resultado: 'mensaje_enviado',
+      p_canal: 'whatsapp',
+    })
+
+    if (fallo) {
+      if (ventana) ventana.close()
+      setError(
+        /YA_ENVIADO/.test(fallo.message)
+          ? `A ${s.nombre} ya se le envió un mensaje. No se envió otro.`
+          : fallo.message
+      )
+      await cargar(dias)
+    } else {
+      if (ventana) ventana.location.href = url
+      else window.location.href = url
+      setMensaje(`Mensaje a ${s.nombre} ${s.apellido} registrado. Ya no aparece en la lista.`)
+      await cargar(dias)
+    }
+
+    setEnviando((e) => ({ ...e, [s.miembro_id]: false }))
+  }
+
   function atendido(s) {
     if (s.proximo_contacto && s.proximo_contacto > hoyGuayaquil()) return true
     const d = diasDesde(s.ultimo_contacto_at)
-    return d !== null && d <= 3
+    return d !== null && d <= DIAS_OCULTO
   }
 
   const visibles = ocultarContactados ? lista.filter((s) => !atendido(s)) : lista
@@ -122,7 +162,7 @@ export default function SeguimientoPage() {
         </label>
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={ocultarContactados} onChange={(e) => setOcultarContactados(e.target.checked)} />
-          Ocultar ya contactados (últimos 3 días o con próximo contacto)
+          Ocultar socios ya contactados (últimos 7 días o con próximo contacto)
         </label>
         <button type="button" onClick={() => cargar(dias)} disabled={cargando} className="ml-auto inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50">
           <RefreshCw size={16} />
@@ -132,7 +172,7 @@ export default function SeguimientoPage() {
 
       <p className="text-sm text-gray-600">
         <strong>{visibles.length}</strong> socio{visibles.length === 1 ? '' : 's'} por contactar
-        {ocultos > 0 ? ` · ${ocultos} ya atendido${ocultos === 1 ? '' : 's'}` : ''}
+        {ocultos > 0 && ocultarContactados ? ` · ${ocultos} ya contactado${ocultos === 1 ? '' : 's'} (ocultos)` : ''}
       </p>
 
       {cargando ? (
@@ -142,7 +182,7 @@ export default function SeguimientoPage() {
       ) : (
         <div className="space-y-3">
           {visibles.map((s) => {
-            const wa = enlaceWhatsApp(s.telefono, mensajeAusencia(s.nombre))
+            const tieneWa = Boolean(enlaceWhatsApp(s.telefono, 'x'))
             return (
               <div key={s.miembro_id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -165,24 +205,29 @@ export default function SeguimientoPage() {
 
                 {s.ultimo_contacto_at && (
                   <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">
-                    Último contacto hace {diasDesde(s.ultimo_contacto_at)} día(s): {etiquetaResultado(s.ultimo_resultado)}
+                    Último contacto hace {diasDesde(s.ultimo_contacto_at)} día(s){s.ultimo_contacto_por ? ` por ${s.ultimo_contacto_por}` : ''}: {etiquetaResultado(s.ultimo_resultado)}
                     {s.ultimo_motivo ? ` · ${s.ultimo_motivo}` : ''}
                     {s.proximo_contacto ? ` · volver a contactar el ${fechaCorta(s.proximo_contacto)}` : ''}
                   </p>
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {wa ? (
-                    <a href={wa} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">
+                  {tieneWa ? (
+                    <button
+                      type="button"
+                      onClick={() => enviarWhatsApp(s)}
+                      disabled={Boolean(enviando[s.miembro_id])}
+                      className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
                       <MessageCircle size={16} />
-                      WhatsApp
-                    </a>
+                      {enviando[s.miembro_id] ? 'Abriendo...' : 'Enviar WhatsApp'}
+                    </button>
                   ) : (
                     <span className="rounded-xl bg-gray-100 px-4 py-2 text-sm text-gray-500">Sin WhatsApp válido</span>
                   )}
                   <button type="button" onClick={() => setSeleccionado(s)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800">
                     <ClipboardPen size={16} />
-                    Registrar seguimiento
+                    Registrar respuesta
                   </button>
                 </div>
               </div>
@@ -254,7 +299,7 @@ function ModalSeguimiento({ socio, onCerrar, onGuardado }) {
       <div role="dialog" aria-modal="true" className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Registrar seguimiento</h2>
+            <h2 className="text-xl font-bold text-gray-900">Registrar respuesta del socio</h2>
             <p className="text-sm text-gray-600">
               {socio.nombre} {socio.apellido} · {socio.dias_sin_entrenar} días sin entrenar
             </p>
