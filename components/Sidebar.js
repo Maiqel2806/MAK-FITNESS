@@ -22,6 +22,7 @@ import {
   HeartHandshake,
   Bell,
   Repeat,
+  TrendingDown,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 
@@ -65,6 +66,12 @@ const navBase = [
     href: '/renovaciones',
     icon: Repeat,
     label: 'Renovaciones del día',
+    roles: ['dueno', 'administrador'],
+  },
+  {
+    href: '/retencion',
+    icon: TrendingDown,
+    label: 'Retención y bajas',
     roles: ['dueno', 'administrador'],
   },
   {
