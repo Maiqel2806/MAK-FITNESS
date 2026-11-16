@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { fechaHoyGuayaquil, inicioDiaISOGuayaquil, finDiaISOGuayaquil } from '@/lib/estadoMembresia'
 import {
   Search,
   Save,
@@ -210,6 +211,8 @@ export default function AsistenciaPage() {
   const [membresias, setMembresias] = useState([])
   const [asistenciasHoy, setAsistenciasHoy] = useState([])
   const [observacion, setObservacion] = useState('')
+  const [entradasMiembroHoy, setEntradasMiembroHoy] = useState([])
+  const [confirmaOtra, setConfirmaOtra] = useState(false)
 
   const [buscando, setBuscando] = useState(false)
   const [registrando, setRegistrando] = useState(false)
@@ -281,6 +284,8 @@ export default function AsistenciaPage() {
     setMiembro(null)
     setMembresias([])
     setObservacion('')
+    setEntradasMiembroHoy([])
+    setConfirmaOtra(false)
     setError('')
     setMensaje('')
 
@@ -301,6 +306,8 @@ export default function AsistenciaPage() {
     setMiembro(null)
     setMembresias([])
     setObservacion('')
+    setEntradasMiembroHoy([])
+    setConfirmaOtra(false)
 
     if (!codigoLimpio || codigoLimpio.length !== 5) {
       setError('Ingresa el código de 5 dígitos del socio.')
@@ -346,6 +353,23 @@ export default function AsistenciaPage() {
       return
     }
 
+    // ¿Ya registró entrada hoy? (día de Guayaquil)
+    const hoyGye = fechaHoyGuayaquil()
+    const { data: entradasHoy, error: errorEntradas } = await supabase
+      .from('asistencia')
+      .select('id, fecha_entrada')
+      .eq('miembro_id', miembroEncontrado.id)
+      .gte('fecha_entrada', inicioDiaISOGuayaquil(hoyGye))
+      .lte('fecha_entrada', finDiaISOGuayaquil(hoyGye))
+      .order('fecha_entrada', { ascending: false })
+
+    if (errorEntradas) {
+      setError(errorEntradas.message)
+      setBuscando(false)
+      return
+    }
+
+    setEntradasMiembroHoy(entradasHoy || [])
     setMiembro(miembroEncontrado)
     setMembresias(membresiasEncontradas || [])
     setBuscando(false)
@@ -374,6 +398,12 @@ export default function AsistenciaPage() {
 
     if (!estado.autorizado) {
       setError(estado.mensaje)
+      setRegistrando(false)
+      return
+    }
+
+    if (entradasMiembroHoy.length > 0 && !confirmaOtra) {
+      setError('Este socio ya registró entrada hoy. Marca la casilla para registrar otra entrada.')
       setRegistrando(false)
       return
     }
@@ -409,6 +439,12 @@ export default function AsistenciaPage() {
 
     setMensaje('Entrada registrada correctamente. El socio puede ingresar.')
     setObservacion('')
+    // Queda constancia local de la entrada recién registrada (evita un doble clic accidental)
+    setEntradasMiembroHoy((previas) => [
+      { id: `nueva-${Date.now()}`, fecha_entrada: new Date().toISOString() },
+      ...previas,
+    ])
+    setConfirmaOtra(false)
     setRegistrando(false)
   }
 
@@ -701,6 +737,36 @@ export default function AsistenciaPage() {
                 </div>
               )}
 
+              {estadoMiembro.autorizado && entradasMiembroHoy.length > 0 && (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5">
+                  <p className="flex items-center gap-2 font-bold text-amber-900">
+                    <AlertTriangle size={20} />
+                    Este socio ya registró entrada hoy
+                  </p>
+                  <p className="mt-1 text-sm text-amber-800">
+                    Hora(s):{' '}
+                    {entradasMiembroHoy
+                      .map((e) =>
+                        new Date(e.fecha_entrada).toLocaleTimeString('es-EC', {
+                          timeZone: 'America/Guayaquil',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      )
+                      .join(', ')}
+                    . Verifica antes de registrarlo de nuevo.
+                  </p>
+                  <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-amber-900">
+                    <input
+                      type="checkbox"
+                      checked={confirmaOtra}
+                      onChange={(e) => setConfirmaOtra(e.target.checked)}
+                    />
+                    Registrar otra entrada de todos modos
+                  </label>
+                </div>
+              )}
+
               <div className="rounded-2xl border border-gray-200 bg-white p-5">
                 <label className="mb-1 block text-sm font-medium text-gray-700">
                   Observación opcional
@@ -716,7 +782,7 @@ export default function AsistenciaPage() {
                 <button
                   type="button"
                   onClick={registrarEntrada}
-                  disabled={registrando || !estadoMiembro.autorizado}
+                  disabled={registrando || !estadoMiembro.autorizado || (entradasMiembroHoy.length > 0 && !confirmaOtra)}
                   className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-black px-5 py-4 text-base font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Save size={20} />
