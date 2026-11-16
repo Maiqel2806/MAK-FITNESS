@@ -23,6 +23,7 @@ import {
   Bell,
   Repeat,
   TrendingDown,
+  PiggyBank,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 
@@ -115,6 +116,12 @@ const navBase = [
     href: '/reportes',
     icon: BarChart3,
     label: 'Reportes',
+    roles: ['dueno', 'administrador'],
+  },
+  {
+    href: '/utilidad',
+    icon: PiggyBank,
+    label: 'Utilidad mensual',
     roles: ['dueno', 'administrador'],
   },
   {
