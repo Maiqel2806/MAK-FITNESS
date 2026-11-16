@@ -1,0 +1,272 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import { Clock3, LogIn, LogOut, RefreshCw } from 'lucide-react'
+import { createClient } from '@/lib/supabase'
+import { usePerfil } from '@/components/UserContext'
+
+const supabase = createClient()
+
+function formatoFecha(fecha) {
+  if (!fecha) return '—'
+
+  return new Date(fecha).toLocaleString('es-EC', {
+    timeZone: 'America/Guayaquil',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  })
+}
+
+function calcularHoras(inicio, fin) {
+  if (!inicio || !fin) return '—'
+
+  const minutos = Math.max(
+    0,
+    Math.floor(
+      (new Date(fin) - new Date(inicio)) / 60000
+    )
+  )
+
+  const horas = Math.floor(minutos / 60)
+  const resto = minutos % 60
+
+  return `${horas} h ${String(resto).padStart(2, '0')} min`
+}
+
+export default function RegistroColaboradores() {
+  const perfil = usePerfil()
+
+  const [jornadas, setJornadas] = useState([])
+  const [cargando, setCargando] = useState(true)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+  const [mensaje, setMensaje] = useState('')
+
+  const cargar = useCallback(async () => {
+    setCargando(true)
+
+    const { data, error: fallo } = await supabase.rpc(
+      'mak_mis_jornadas',
+      { p_limite: 20 }
+    )
+
+    if (fallo) {
+      setError(fallo.message)
+    } else {
+      setJornadas(data?.jornadas || [])
+      setError('')
+    }
+
+    setCargando(false)
+  }, [])
+
+  useEffect(() => {
+    cargar()
+  }, [cargar])
+
+  const abierta = jornadas.find(
+    jornada => !jornada.salida_at
+  )
+
+  async function marcar(accion) {
+    if (guardando || cargando) return
+
+    if (
+      accion === 'salida' &&
+      !window.confirm('¿Confirmas tu salida laboral?')
+    ) {
+      return
+    }
+
+    setGuardando(true)
+    setError('')
+    setMensaje('')
+
+    try {
+      const { error: fallo } = await supabase.rpc(
+        'mak_registrar_jornada',
+        { p_accion: accion }
+      )
+
+      if (fallo) throw fallo
+
+      setMensaje(
+        accion === 'ingreso'
+          ? 'Ingreso registrado correctamente.'
+          : 'Salida registrada correctamente.'
+      )
+
+      await cargar()
+    } catch (err) {
+      setError(err.message || 'No se pudo registrar.')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+
+      <div>
+        <h1 className="text-3xl font-bold">
+          Registro Colaboradores
+        </h1>
+
+        <p className="mt-2 text-gray-500">
+          Control de ingreso y salida laboral
+        </p>
+      </div>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm border">
+
+        <div className="flex flex-wrap justify-between gap-4">
+
+          <div>
+            <p className="text-sm text-gray-500">
+              Colaborador
+            </p>
+
+            <h2 className="text-xl font-bold">
+              {perfil?.nombre || 'Colaborador'}
+            </h2>
+          </div>
+
+          <span className={
+            `rounded-full px-4 py-2 text-sm font-semibold ${
+              abierta
+                ? 'bg-green-100 text-green-700'
+                : 'bg-gray-100 text-gray-600'
+            }`
+          }>
+            {cargando
+              ? 'Consultando...'
+              : abierta
+                ? 'Jornada activa'
+                : 'Sin jornada activa'}
+          </span>
+
+        </div>
+
+        <div className="mt-6 rounded-xl bg-gray-50 p-4">
+
+          <p className="text-sm text-gray-500">
+            Último ingreso
+          </p>
+
+          <p className="mt-1 font-semibold">
+            {abierta
+              ? formatoFecha(abierta.ingreso_at)
+              : 'Sin jornada abierta'}
+          </p>
+
+        </div>
+
+        {error && (
+          <div role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-red-700">
+            {error}
+          </div>
+        )}
+
+        {mensaje && (
+          <div role="status" className="mt-4 rounded-xl bg-green-50 p-3 text-green-700">
+            {mensaje}
+          </div>
+        )}
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+
+          <button
+            onClick={() => marcar('ingreso')}
+            disabled={cargando || guardando || !!abierta}
+            className="flex items-center justify-center gap-3 rounded-xl bg-emerald-600 p-5 font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+          >
+            <LogIn size={24} />
+            INGRESO
+          </button>
+
+          <button
+            onClick={() => marcar('salida')}
+            disabled={cargando || guardando || !abierta}
+            className="flex items-center justify-center gap-3 rounded-xl bg-gray-900 p-5 font-bold text-white hover:bg-black disabled:opacity-40"
+          >
+            <LogOut size={24} />
+            SALIDA
+          </button>
+
+        </div>
+
+        <button
+          onClick={cargar}
+          disabled={cargando || guardando}
+          className="mt-5 flex items-center gap-2 text-sm text-gray-500 disabled:opacity-40"
+        >
+          <RefreshCw size={16} />
+          Actualizar registros
+        </button>
+
+      </section>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm border">
+
+        <h2 className="mb-5 flex items-center gap-2 text-lg font-bold">
+          <Clock3 size={22} />
+          Mis últimas jornadas
+        </h2>
+
+        <div className="overflow-x-auto">
+
+          <table className="w-full min-w-[500px] text-sm">
+
+            <thead>
+              <tr className="border-b text-left text-gray-500">
+                <th className="py-3">Ingreso</th>
+                <th>Salida</th>
+                <th>Horas trabajadas</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {jornadas.map(j => (
+                <tr key={j.id} className="border-b border-gray-100">
+
+                  <td className="py-3">
+                    {formatoFecha(j.ingreso_at)}
+                  </td>
+
+                  <td>
+                    {formatoFecha(j.salida_at)}
+                  </td>
+
+                  <td>
+                    {calcularHoras(
+                      j.ingreso_at,
+                      j.salida_at
+                    )}
+                  </td>
+
+                  <td>
+                    {j.salida_at
+                      ? 'Finalizada'
+                      : 'En curso'}
+                  </td>
+
+                </tr>
+              ))}
+            </tbody>
+
+          </table>
+
+          {!cargando && jornadas.length === 0 && (
+            <p className="py-6 text-center text-gray-500">
+              No existen jornadas registradas.
+            </p>
+          )}
+
+        </div>
+
+      </section>
+
+    </div>
+  )
+}

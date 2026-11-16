@@ -10,6 +10,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { parsearDinero, esDineroValido, limpiarEntradaDinero } from '@/lib/dinero'
 
 const supabase = createClient()
 
@@ -31,7 +32,7 @@ function fechaHora(valor) {
   })
 }
 
-export default function ArqueoCajaPanel({ cajaId, resumen }) {
+export default function ArqueoCajaPanel({ cajaId, resumen, esAdministrador = false }) {
   const [contado, setContado] = useState('')
   const [observaciones, setObservaciones] = useState('')
   const [confirmar, setConfirmar] = useState(false)
@@ -74,16 +75,14 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
     cargarHistorial()
   }, [cargarHistorial])
 
-  const importeValido =
-    /^\d+(\.\d{1,2})?$/.test(contado.trim()) &&
-    Number(contado) <= 9999999999.99
+  const importeValido = esDineroValido(contado)
 
   const esperado = resumen
     ? Number(resumen.efectivo_esperado)
     : null
 
   const diferencia = importeValido && esperado !== null
-    ? Math.round((Number(contado) - esperado) * 100) / 100
+    ? Math.round((parsearDinero(contado) - esperado) * 100) / 100
     : null
 
   function prepararArqueo() {
@@ -95,7 +94,9 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
       return
     }
 
-    if (diferencia !== null &&
+    // Colaboradores cuentan a ciegas: el servidor valida si hay diferencia.
+    if (esAdministrador &&
+        diferencia !== null &&
         diferencia !== 0 &&
         !observaciones.trim()) {
       setError('Debes explicar el faltante o sobrante.')
@@ -137,7 +138,7 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
       const { data, error: fallo } = await supabase.rpc(
         'mak_registrar_arqueo_caja',
         {
-          p_efectivo_contado: Number(contado),
+          p_efectivo_contado: parsearDinero(contado),
           p_observaciones: observaciones.trim() || null,
         }
       )
@@ -145,7 +146,9 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
       if (fallo) throw fallo
 
       setMensaje(
-        `Arqueo registrado. Diferencia: ${dinero(data.diferencia)}`
+        esAdministrador
+          ? `Arqueo registrado. Diferencia: ${dinero(data.diferencia)}`
+          : 'Arqueo registrado correctamente.'
       )
       setConfirmar(false)
       setContado('')
@@ -153,7 +156,11 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
       await cargarHistorial()
     } catch (err) {
       setConfirmar(false)
-      setError(err.message || 'No se pudo registrar el arqueo.')
+      setError(
+        /explicar/i.test(err.message || '')
+          ? 'El conteo no coincide con el sistema. Revisa el efectivo; si es correcto, escribe una observación y confirma de nuevo.'
+          : (err.message || 'No se pudo registrar el arqueo.')
+      )
     } finally {
       setGuardando(false)
     }
@@ -220,11 +227,12 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
               inputMode="decimal"
               placeholder="0.00"
               value={contado}
-              onChange={(e) => setContado(e.target.value)}
+              onChange={(e) => setContado(limpiarEntradaDinero(e.target.value))}
               className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-lg font-bold outline-none focus:border-[#02AFBB]"
             />
           </div>
 
+          {esAdministrador && (
           <div>
             <p className="mb-2 text-sm font-semibold text-gray-700">
               Diferencia estimada
@@ -244,6 +252,7 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
               </p>
             </div>
           </div>
+          )}
         </div>
 
         <div className="mt-4">
@@ -307,9 +316,9 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
                   <tr>
                     <th className="p-3">Colaborador</th>
                     <th>Fecha y hora</th>
-                    <th>Esperado</th>
+                    {esAdministrador && <th>Esperado</th>}
                     <th>Contado</th>
-                    <th>Diferencia</th>
+                    {esAdministrador && <th>Diferencia</th>}
                     <th>Observaciones</th>
                   </tr>
                 </thead>
@@ -321,15 +330,17 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
                         {item.colaborador}
                       </td>
                       <td>{fechaHora(item.realizado_at)}</td>
-                      <td>{dinero(item.efectivo_esperado)}</td>
+                      {esAdministrador && <td>{dinero(item.efectivo_esperado)}</td>}
                       <td>{dinero(item.efectivo_contado)}</td>
-                      <td className={
-                        Number(item.diferencia) === 0
-                          ? 'font-semibold text-[#07838C]'
-                          : 'font-semibold text-red-600'
-                      }>
-                        {dinero(item.diferencia)}
-                      </td>
+                      {esAdministrador && (
+                        <td className={
+                          Number(item.diferencia) === 0
+                            ? 'font-semibold text-[#07838C]'
+                            : 'font-semibold text-red-600'
+                        }>
+                          {dinero(item.diferencia)}
+                        </td>
+                      )}
                       <td>{item.observaciones || '—'}</td>
                     </tr>
                   ))}
@@ -364,10 +375,12 @@ export default function ArqueoCajaPanel({ cajaId, resumen }) {
                 <span>Declarado</span>
                 <strong>{dinero(contado)}</strong>
               </div>
-              <div className="flex justify-between">
-                <span>Diferencia estimada</span>
-                <strong>{dinero(diferencia)}</strong>
-              </div>
+              {esAdministrador && (
+                <div className="flex justify-between">
+                  <span>Diferencia estimada</span>
+                  <strong>{dinero(diferencia)}</strong>
+                </div>
+              )}
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3">

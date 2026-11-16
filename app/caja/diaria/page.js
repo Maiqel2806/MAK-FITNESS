@@ -11,10 +11,12 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { parsearDinero, esDineroValido, limpiarEntradaDinero } from '@/lib/dinero'
 import { usePerfil } from '@/components/UserContext'
 import ArqueoCajaPanel from '@/components/ArqueoCajaPanel'
 import EntregaCajaPanel from '@/components/EntregaCajaPanel'
 import CierreCajaPanel from '@/components/CierreCajaPanel'
+import TicketCierreCaja from '@/components/TicketCierreCaja'
 
 const supabase = createClient()
 
@@ -44,7 +46,15 @@ export default function CajaDiariaPage() {
   const [cajaHoy, setCajaHoy] = useState(null)
   const [resumen, setResumen] = useState(null)
   const [errorResumen, setErrorResumen] = useState('')
-  const [fondo, setFondo] = useState('5.00')
+  const [fondo, setFondo] = useState('')
+  const [justificacion, setJustificacion] = useState('')
+  const [info, setInfo] = useState(null)
+  const [historial, setHistorial] = useState(null)
+  const [programada, setProgramada] = useState(null)
+  const [pedirMotivo, setPedirMotivo] = useState(false)
+  const [verHistorial, setVerHistorial] = useState(false)
+  const [incluirPruebas, setIncluirPruebas] = useState(false)
+  const [ticket, setTicket] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [confirmar, setConfirmar] = useState(false)
@@ -72,6 +82,22 @@ export default function CajaDiariaPage() {
 
       setCajaHoy(estadoHoy)
       setCaja(data || { caja_abierta: false })
+
+      // Solo administración puede consultar esto; para otros roles falla en silencio.
+      try {
+        const { data: infoData } = await supabase.rpc('mak_info_apertura_caja')
+        setInfo(infoData || null)
+      } catch {
+        setInfo(null)
+      }
+
+      // Para el personal: indica si hay apertura programada (sin mostrar montos).
+      try {
+        const { data: prog } = await supabase.rpc('mak_estado_apertura_programada')
+        setProgramada(prog || null)
+      } catch {
+        setProgramada(null)
+      }
       setResumen(null)
       setErrorResumen('')
 
@@ -107,17 +133,50 @@ export default function CajaDiariaPage() {
     consultar()
   }, [consultar])
 
-  const fondoValido =
-    /^\d+(\.\d{1,2})?$/.test(fondo.trim()) &&
-    Number(fondo) >= 0 &&
-    Number(fondo) <= 9999999999.99
+  const fondoValido = esDineroValido(fondo)
+  // Administración abre siempre; el personal solo si hay apertura programada.
+  const puedeAbrir = esAdministrador || programada?.programada === true
+  const montoFondo = fondoValido ? parsearDinero(fondo) : null
+  const esperadaApertura = info?.efectivo_dejado_ultimo == null
+    ? null
+    : Number(info.efectivo_dejado_ultimo)
+  const difApertura = montoFondo !== null && esperadaApertura !== null
+    ? Math.round((montoFondo - esperadaApertura) * 100) / 100
+    : null
+  const falta = (
+    (difApertura !== null && difApertura !== 0) ||
+    (!esAdministrador && pedirMotivo)
+  ) && justificacion.trim().length < 10
+  const mostrarMotivo = (difApertura !== null && difApertura !== 0) ||
+    (!esAdministrador && pedirMotivo)
+
+  async function traerHistorial(conPruebas) {
+    const { data, error: fallo } = await supabase.rpc('mak_historial_cajas', {
+      p_limite: 31,
+      p_incluir_pruebas: conPruebas,
+    })
+    if (fallo) setError(fallo.message)
+    else setHistorial(data || [])
+  }
+
+  async function cargarHistorial() {
+    setVerHistorial((v) => !v)
+    if (historial) return
+    await traerHistorial(incluirPruebas)
+  }
+
+  async function alternarPruebas(valor) {
+    setIncluirPruebas(valor)
+    await traerHistorial(valor)
+  }
 
   async function abrirCaja() {
     if (
       guardando ||
       cargando ||
-      !esAdministrador ||
+      !puedeAbrir ||
       !fondoValido ||
+      falta ||
       caja?.caja_abierta ||
       cajaHoy?.caja_registrada
     ) return
@@ -130,11 +189,18 @@ export default function CajaDiariaPage() {
     try {
       const { error: fallo } = await supabase.rpc(
         'mak_abrir_caja_dia',
-        { p_fondo: Number(fondo) }
+        {
+          p_fondo: parsearDinero(fondo),
+          p_justificacion: mostrarMotivo ? justificacion.trim() : null,
+        }
       )
 
       if (fallo) throw fallo
 
+      setFondo('')
+      setJustificacion('')
+      setPedirMotivo(false)
+      setHistorial(null)
       await consultar()
       setMensaje('Caja abierta correctamente.')
     } catch (err) {
@@ -142,9 +208,17 @@ export default function CajaDiariaPage() {
       // Consultar limpia los errores: mostrar el fallo después.
       await consultar()
       setMensaje('')
-      setError(
-        err.message || 'No se pudo abrir la caja.'
-      )
+      if (/no coincide/i.test(err.message || '')) {
+        setPedirMotivo(true)
+        setError(
+          'El efectivo contado no coincide con lo que dejó administración. ' +
+          'Cuenta de nuevo; si es correcto, explica la diferencia y confirma.'
+        )
+      } else {
+        setError(
+          err.message || 'No se pudo abrir la caja.'
+        )
+      }
     } finally {
       setGuardando(false)
     }
@@ -227,6 +301,12 @@ export default function CajaDiariaPage() {
               Caja abierta
             </div>
 
+            {(info?.caja_abierta_vencida || programada?.caja_abierta_vencida) && (
+              <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                Esta caja es de un día anterior y quedó abierta. Administración debe contar el efectivo y cerrarla antes de seguir cobrando en efectivo.
+              </div>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl bg-gray-50 p-5">
                 <p className="text-sm text-gray-500">
@@ -251,7 +331,11 @@ export default function CajaDiariaPage() {
             {esAdministrador && (
               <CierreCajaPanel
                 cajaId={caja.id}
-                onCerrada={async () => {
+                onCerrada={async (resultado) => {
+                  setTicket({
+                    ...resultado,
+                    responsable: perfil?.nombre || perfil?.usuario || null,
+                  })
                   setMensaje('Caja cerrada correctamente. El cierre quedó registrado en Supabase.')
                   await consultar()
                 }}
@@ -268,6 +352,7 @@ export default function CajaDiariaPage() {
             <ArqueoCajaPanel
               cajaId={caja.id}
               resumen={resumen}
+              esAdministrador={esAdministrador}
             />
 
             <div className="border-t border-gray-200 pt-5">
@@ -324,6 +409,7 @@ export default function CajaDiariaPage() {
 
                   </div>
 
+                  {esAdministrador && (
                   <div className="mt-5 rounded-2xl border border-[#02AFBB]/30 bg-[#02AFBB]/10 p-6">
 
                     <p className="text-sm font-semibold text-[#07838C]">
@@ -340,6 +426,7 @@ export default function CajaDiariaPage() {
                     </p>
 
                   </div>
+                  )}
 
                   {(resumen.movimientos_sin_responsable ?? 0) > 0 && (
                     <p className="mt-4 text-sm font-semibold text-amber-700">
@@ -399,6 +486,13 @@ export default function CajaDiariaPage() {
               </div>
             </div>
 
+            {esAdministrador && info?.efectivo_dejado_ultimo != null && (
+              <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
+                Efectivo que quedó en caja para la próxima apertura:{' '}
+                <strong>{dinero(info.efectivo_dejado_ultimo)}</strong>
+              </p>
+            )}
+
             <p className="text-sm text-gray-500">
               Este cierre es compartido por administración
               y colaboradores. La siguiente caja se abrirá
@@ -412,18 +506,25 @@ export default function CajaDiariaPage() {
                 No hay una caja abierta.
               </p>
               <p className="mt-1 text-sm text-gray-500">
-                Administración debe registrar el fondo inicial
-                para comenzar una nueva jornada de caja.
+                {esAdministrador
+                  ? 'Registra el efectivo contado para comenzar la jornada.'
+                  : 'Cuenta el efectivo que dejó administración y regístralo para comenzar la jornada.'}
               </p>
             </div>
 
-            {esAdministrador && !cajaHoy?.caja_registrada && (
+            {!esAdministrador && !cajaHoy?.caja_registrada && programada?.programada === false && (
+              <p className="text-sm font-semibold text-amber-700">
+                No hay apertura programada. Solicita a administración abrir la caja.
+              </p>
+            )}
+
+            {puedeAbrir && !cajaHoy?.caja_registrada && (
               <div className="max-w-sm space-y-3">
                 <label
                   htmlFor="fondo-inicial"
                   className="block text-sm font-semibold text-gray-700"
                 >
-                  Fondo inicial de efectivo (USD)
+                  Efectivo físico contado en caja (USD)
                 </label>
 
                 <input
@@ -431,24 +532,134 @@ export default function CajaDiariaPage() {
                   type="text"
                   inputMode="decimal"
                   value={fondo}
-                  onChange={(e) => setFondo(e.target.value)}
+                  onChange={(e) => setFondo(limpiarEntradaDinero(e.target.value))}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-lg font-semibold outline-none focus:border-[#02AFBB]"
-                  placeholder="5.00"
+                  placeholder="0.00"
                 />
+
+                {mostrarMotivo && (
+                  <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                    <p className="text-sm font-semibold text-red-700">
+                      {esAdministrador && difApertura !== null
+                        ? `No coincide con lo dejado en el último cierre (${dinero(difApertura)}). Cuenta de nuevo; si es correcto, explica la diferencia.`
+                        : 'No coincide con lo que dejó administración. Cuenta de nuevo; si es correcto, explica la diferencia.'}
+                    </p>
+                    <textarea
+                      rows={2}
+                      value={justificacion}
+                      onChange={(e) => setJustificacion(e.target.value)}
+                      placeholder="Motivo de la diferencia (mín. 10 caracteres)"
+                      className="w-full resize-none rounded-lg border border-red-200 bg-white p-2 text-sm outline-none"
+                    />
+                  </div>
+                )}
 
                 <button
                   type="button"
                   onClick={() => setConfirmar(true)}
-                  disabled={!fondoValido || guardando}
+                  disabled={!fondoValido || falta || guardando}
                   className="w-full rounded-xl bg-[#02AFBB] px-5 py-3 font-bold text-white hover:bg-[#078F99] disabled:opacity-40"
                 >
                   Abrir caja del día
                 </button>
               </div>
             )}
+
+            {esAdministrador && info?.efectivo_dejado_ultimo == null && !cajaHoy?.caja_registrada && (
+              <p className="text-xs text-gray-500">
+                Primera apertura con el nuevo control: cuenta el efectivo físico y regístralo. Desde el próximo cierre se comparará automáticamente.
+              </p>
+            )}
           </div>
         ) : null}
       </section>
+
+      {esAdministrador && (
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <button
+            type="button"
+            onClick={cargarHistorial}
+            className="text-sm font-bold text-[#07838C] hover:underline"
+          >
+            {verHistorial ? 'Ocultar historial de cajas' : 'Ver historial de cajas (últimos 31)'}
+          </button>
+
+          {verHistorial && (
+            <label className="mt-3 flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={incluirPruebas}
+                onChange={(e) => alternarPruebas(e.target.checked)}
+              />
+              Incluir cajas de prueba (auditoría)
+            </label>
+          )}
+
+          {verHistorial && historial && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="border-b text-gray-500">
+                  <tr>
+                    <th className="p-2">Fecha</th>
+                    <th>Apertura</th>
+                    <th>Dif. apertura</th>
+                    <th>Esperado cierre</th>
+                    <th>Contado</th>
+                    <th>Dif. cierre</th>
+                    <th>Retiro</th>
+                    <th>Dejado</th>
+                    <th>Ticket</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historial.map((c) => (
+                    <tr key={c.id} className="border-b border-gray-100" title={[c.apertura_justificacion, c.observaciones].filter(Boolean).join(' | ')}>
+                      <td className="p-2 font-semibold">{c.fecha}{c.estado === 'abierta' ? ' (abierta)' : ''}
+                        {c.es_prueba && (
+                          <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">PRUEBA</span>
+                        )}
+                      </td>
+                      <td>{dinero(c.fondo_inicial)}</td>
+                      <td className={Number(c.apertura_diferencia || 0) !== 0 ? 'font-semibold text-red-600' : ''}>
+                        {c.apertura_diferencia == null ? '—' : dinero(c.apertura_diferencia)}
+                      </td>
+                      <td>{c.efectivo_esperado_cierre == null ? '—' : dinero(c.efectivo_esperado_cierre)}</td>
+                      <td>{c.efectivo_contado_cierre == null ? '—' : dinero(c.efectivo_contado_cierre)}</td>
+                      <td className={Number(c.diferencia_cierre || 0) !== 0 ? 'font-semibold text-red-600' : ''}>
+                        {c.diferencia_cierre == null ? '—' : dinero(c.diferencia_cierre)}
+                      </td>
+                      <td>{c.retiro_cierre == null ? '—' : dinero(c.retiro_cierre)}</td>
+                      <td>{c.efectivo_dejado == null ? '—' : dinero(c.efectivo_dejado)}</td>
+                      <td>
+                        {c.estado === 'cerrada' && c.efectivo_esperado_cierre != null ? (
+                          <button
+                            type="button"
+                            className="text-xs font-bold text-[#07838C] hover:underline"
+                            onClick={() => setTicket({
+                              fecha: c.fecha,
+                              fondo_inicial: c.fondo_inicial,
+                              efectivo_esperado: c.efectivo_esperado_cierre,
+                              efectivo_contado: c.efectivo_contado_cierre,
+                              retiro: c.retiro_cierre,
+                              efectivo_dejado: c.efectivo_dejado,
+                              observaciones: c.observaciones,
+                            })}
+                          >
+                            Ver
+                          </button>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-2 text-xs text-gray-500">Pasa el cursor sobre una fila para ver las justificaciones.</p>
+            </div>
+          )}
+        </section>
+      )}
+
+      <TicketCierreCaja ticket={ticket} onCerrar={() => setTicket(null)} />
 
       {confirmar && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
@@ -466,13 +677,12 @@ export default function CajaDiariaPage() {
             </h2>
 
             <p className="mt-3 text-sm leading-6 text-gray-600">
-              ¿Confirmas la apertura de caja con un fondo
-              inicial de <strong>{dinero(fondo)}</strong>?
+              ¿Confirmas la apertura de caja con
+              <strong> {dinero(parsearDinero(fondo))}</strong> de efectivo contado?
             </p>
 
             <p className="mt-3 text-sm text-gray-500">
-              Comprueba que el efectivo físico coincida
-              antes de continuar.
+              Este monto es el efectivo físico contado ahora.
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-3">

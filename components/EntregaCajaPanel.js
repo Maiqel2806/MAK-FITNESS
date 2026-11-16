@@ -11,6 +11,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { parsearDinero, esDineroValido, limpiarEntradaDinero } from '@/lib/dinero'
 
 const supabase = createClient()
 
@@ -33,8 +34,7 @@ function fechaHora(valor) {
 }
 
 function montoValido(valor) {
-  return /^\d+(\.\d{1,2})?$/.test(valor.trim()) &&
-    Number(valor) <= 9999999999.99
+  return esDineroValido(valor)
 }
 
 function estadoEntrega(estado) {
@@ -162,7 +162,7 @@ export default function EntregaCajaPanel({
       if (accion === 'entregar') {
         funcion = 'mak_iniciar_entrega_caja'
         parametros = {
-          p_efectivo: Number(importe),
+          p_efectivo: parsearDinero(importe),
           p_observaciones: observaciones.trim() || null,
         }
       } else if (accion === 'recibir') {
@@ -173,7 +173,7 @@ export default function EntregaCajaPanel({
         funcion = 'mak_recibir_entrega_caja'
         parametros = {
           p_entrega_id: entregaElegida.id,
-          p_efectivo: Number(importe),
+          p_efectivo: parsearDinero(importe),
           p_observaciones: observaciones.trim() || null,
         }
       } else if (accion === 'resolver') {
@@ -481,7 +481,7 @@ export default function EntregaCajaPanel({
                   inputMode="decimal"
                   autoFocus
                   value={importe}
-                  onChange={(e) => setImporte(e.target.value)}
+                  onChange={(e) => setImporte(limpiarEntradaDinero(e.target.value))}
                   placeholder="0.00"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-lg font-bold outline-none focus:border-[#02AFBB]"
                 />

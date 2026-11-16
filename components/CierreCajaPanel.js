@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { LockKeyhole } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { parsearDinero, esDineroValido, limpiarEntradaDinero } from '@/lib/dinero'
 
 const supabase = createClient()
 
@@ -19,20 +20,33 @@ export default function CierreCajaPanel({ cajaId, onCerrada }) {
   const [abierto, setAbierto] = useState(false)
   const [contado, setContado] = useState('')
   const [observaciones, setObservaciones] = useState('')
+  const [dejado, setDejado] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [resumen, setResumen] = useState(null)
 
-  const valido =
-    /^\d+(\.\d{1,2})?$/.test(contado.trim()) &&
-    Number(contado) <= 9999999999.99
+  const valido = esDineroValido(contado)
+  const montoContado = valido ? parsearDinero(contado) : null
+  // Si no se escribe nada, queda todo el efectivo contado en caja (sin retiro)
+  const montoDejado = dejado.trim() === '' ? montoContado : parsearDinero(dejado)
+  const dejadoValido =
+    montoContado !== null &&
+    montoDejado !== null &&
+    montoDejado <= montoContado
+  const retiro = dejadoValido
+    ? Math.round((montoContado - montoDejado) * 100) / 100
+    : null
 
   const diferencia = valido && resumen
     ? Math.round(
-        (Number(contado) - Number(resumen.efectivo_esperado))
+        (parsearDinero(contado) - Number(resumen.efectivo_esperado))
         * 100
       ) / 100
     : null
+
+  const faltaJustificar =
+    diferencia !== null && diferencia !== 0 &&
+    observaciones.trim().length < 10
 
   function cerrarModal() {
     if (guardando) return
@@ -40,6 +54,7 @@ export default function CierreCajaPanel({ cajaId, onCerrada }) {
     setResumen(null)
     setContado('')
     setObservaciones('')
+    setDejado('')
     setError('')
   }
 
@@ -68,10 +83,10 @@ export default function CierreCajaPanel({ cajaId, onCerrada }) {
   }
 
   async function confirmarCierre() {
-    if (guardando || !valido || !resumen) return
+    if (guardando || !valido || !resumen || !dejadoValido) return
 
-    if (diferencia !== 0 && !observaciones.trim()) {
-      setError('Debes justificar el faltante o sobrante.')
+    if (faltaJustificar) {
+      setError('Debes justificar el faltante o sobrante (mínimo 10 caracteres).')
       return
     }
 
@@ -102,18 +117,27 @@ export default function CierreCajaPanel({ cajaId, onCerrada }) {
         )
       }
 
-      const { error: fallo } = await supabase.rpc(
+      const { data: resultado, error: fallo } = await supabase.rpc(
         'mak_cerrar_caja_dia',
         {
-          p_efectivo_contado: Number(contado),
+          p_efectivo_contado: montoContado,
+          p_efectivo_dejado: montoDejado,
           p_observaciones: observaciones.trim() || null,
         }
       )
 
       if (fallo) throw fallo
 
+      const ticket = {
+        ...(resultado || {}),
+        ingresos: resumen?.ingresos_efectivo,
+        egresos: resumen?.egresos_efectivo,
+        ajustes: resumen?.ajustes,
+        observaciones: observaciones.trim() || null,
+      }
+
       cerrarModal()
-      await onCerrada()
+      await onCerrada(ticket)
     } catch (err) {
       setError(err.message || 'No se pudo cerrar la caja.')
     } finally {
@@ -167,17 +191,8 @@ export default function CierreCajaPanel({ cajaId, onCerrada }) {
             </h2>
 
             <p className="mt-2 text-sm text-gray-600">
-              Cuenta todo el efectivo físico antes de confirmar.
+              Cuenta todo el efectivo físico. Lo que retires queda registrado y mañana se abre con lo que dejes.
             </p>
-
-            <div className="mt-5 rounded-xl bg-[#02AFBB]/10 p-4">
-              <p className="text-sm text-[#07838C]">
-                Efectivo esperado
-              </p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">
-                {dinero(resumen?.efectivo_esperado)}
-              </p>
-            </div>
 
             <label className="mt-5 block text-sm font-semibold text-gray-700">
               Efectivo contado (USD)
@@ -185,15 +200,40 @@ export default function CierreCajaPanel({ cajaId, onCerrada }) {
                 type="text"
                 inputMode="decimal"
                 value={contado}
-                onChange={(e) => setContado(e.target.value)}
+                onChange={(e) => setContado(limpiarEntradaDinero(e.target.value))}
                 placeholder="0.00"
                 className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-lg outline-none focus:border-[#02AFBB]"
               />
             </label>
 
+            <label className="mt-4 block text-sm font-semibold text-gray-700">
+              Efectivo que queda en caja para mañana (USD)
+              <input
+                type="text"
+                inputMode="decimal"
+                value={dejado}
+                onChange={(e) => setDejado(limpiarEntradaDinero(e.target.value))}
+                placeholder={valido ? String(montoContado) : '0.00'}
+                className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-lg outline-none focus:border-[#02AFBB]"
+              />
+            </label>
+
+            {valido && dejado.trim() !== '' && !dejadoValido && (
+              <p className="mt-2 text-xs text-red-600">
+                No puede ser mayor al efectivo contado.
+              </p>
+            )}
+
+            {retiro !== null && (
+              <div className="mt-3 flex justify-between text-sm">
+                <span className="text-gray-600">Efectivo que retiras</span>
+                <strong className="text-gray-900">{dinero(retiro)}</strong>
+              </div>
+            )}
+
             <div className="mt-4 flex justify-between text-sm">
               <span className="text-gray-600">
-                Diferencia
+                Diferencia vs. sistema
               </span>
               <strong className={
                 diferencia === null
@@ -214,7 +254,7 @@ export default function CierreCajaPanel({ cajaId, onCerrada }) {
                 rows={3}
                 value={observaciones}
                 onChange={(e) => setObservaciones(e.target.value)}
-                placeholder="Justifica cualquier diferencia..."
+                placeholder="Si hay faltante o sobrante, explica por qué (mín. 10 caracteres)"
                 className="mt-2 w-full resize-none rounded-xl border border-gray-300 p-3 text-sm outline-none focus:border-[#02AFBB]"
               />
             </label>
@@ -246,7 +286,8 @@ export default function CierreCajaPanel({ cajaId, onCerrada }) {
                 disabled={
                   guardando ||
                   !valido ||
-                  (diferencia !== 0 && !observaciones.trim())
+                  !dejadoValido ||
+                  faltaJustificar
                 }
                 className="rounded-xl bg-gray-900 px-4 py-3 font-semibold text-white disabled:opacity-40"
               >
