@@ -48,6 +48,17 @@ const estadoOpciones = [
   { value: 'suspendido', label: 'Suspendido' },
 ]
 
+// MAK_ORIGEN_V1: canales de origen del socio ("¿Cómo nos conoció?")
+const origenOpciones = [
+  { value: 'redes_sociales', label: 'Redes sociales (Instagram, Facebook, TikTok)' },
+  { value: 'recomendacion', label: 'Recomendación de un socio o conocido' },
+  { value: 'paso_local', label: 'Pasó por el local' },
+  { value: 'publicidad', label: 'Volantes o publicidad' },
+  { value: 'google', label: 'Google o Maps' },
+  { value: 'otro', label: 'Otro' },
+  { value: 'no_indica', label: 'No quiso indicarlo' },
+]
+
 const formularioInicial = {
   codigo_acceso: '',
   nombre: '',
@@ -56,6 +67,8 @@ const formularioInicial = {
   email: '',
   telefono: '',
   fecha_nacimiento: '',
+  origen: '',
+  origen_detalle: '',
   direccion: '',
   contacto_emergencia: '',
   telefono_emergencia: '',
@@ -1622,6 +1635,14 @@ function MiembrosContenido({ perfil }) {
     if (
       !editandoId
     ) {
+      if (!formulario.origen) {
+        setError(
+          'Indica cómo conoció el gimnasio el nuevo socio.'
+        )
+        setGuardando(false)
+        return
+      }
+
       const plan =
         planes.find(
           (item) =>
@@ -1768,6 +1789,20 @@ function MiembrosContenido({ perfil }) {
               codigoGenerado,
           })
         )
+      }
+
+      // MAK_ORIGEN_V1: guardar el origen (si falla, no bloquea el registro)
+      try {
+        const { error: errorOrigen } = await supabase.rpc('mak_guardar_origen', {
+          p_miembro_id: miembroId,
+          p_origen: formulario.origen,
+          p_detalle: formulario.origen_detalle || null,
+        })
+        if (errorOrigen) {
+          console.error('MAK ORIGEN:', errorOrigen.message)
+        }
+      } catch (errorOrigen) {
+        console.error('MAK ORIGEN:', errorOrigen?.message)
       }
 
       // =========================
@@ -3266,6 +3301,47 @@ function MiembrosContenido({ perfil }) {
                     className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
                   />
                 </div>
+
+                {!editandoId && (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      ¿Cómo nos conoció?
+                    </label>
+
+                    <select
+                      value={formulario.origen}
+                      onChange={(e) =>
+                        actualizarCampo('origen', e.target.value)
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                    >
+                      <option value="">Selecciona una opción</option>
+                      {origenOpciones.map((opcion) => (
+                        <option key={opcion.value} value={opcion.value}>
+                          {opcion.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    {(formulario.origen === 'recomendacion' ||
+                      formulario.origen === 'otro') && (
+                      <input
+                        type="text"
+                        maxLength={120}
+                        value={formulario.origen_detalle}
+                        onChange={(e) =>
+                          actualizarCampo('origen_detalle', e.target.value)
+                        }
+                        className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+                        placeholder={
+                          formulario.origen === 'recomendacion'
+                            ? 'Quién lo recomendó (opcional)'
+                            : 'Detalle (opcional)'
+                        }
+                      />
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">

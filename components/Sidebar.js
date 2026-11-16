@@ -26,6 +26,7 @@ import {
   PiggyBank,
   Activity,
   Cake,
+  Megaphone,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 
@@ -130,6 +131,12 @@ const navBase = [
     href: '/horas-pico',
     icon: Activity,
     label: 'Horas pico',
+    roles: ['dueno', 'administrador'],
+  },
+  {
+    href: '/origen',
+    icon: Megaphone,
+    label: 'Origen y promociones',
     roles: ['dueno', 'administrador'],
   },
   {
