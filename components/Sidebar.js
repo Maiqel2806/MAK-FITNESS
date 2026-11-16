@@ -25,6 +25,7 @@ import {
   TrendingDown,
   PiggyBank,
   Activity,
+  Cake,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 
@@ -56,6 +57,12 @@ const navBase = [
     href: '/seguimiento',
     icon: HeartHandshake,
     label: 'Seguimiento',
+    roles: ['dueno', 'administrador', 'empleado'],
+  },
+  {
+    href: '/fechas-clave',
+    icon: Cake,
+    label: 'Fechas clave',
     roles: ['dueno', 'administrador', 'empleado'],
   },
   {

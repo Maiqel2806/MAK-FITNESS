@@ -19,6 +19,7 @@ const rutasEmpleado = [
   '/asistencia',
   '/seguimiento',
   '/por-renovar',
+  '/fechas-clave',
   '/registro-colaboradores',
   '/caja/diaria', // MAK_ARQUEO_COMPARTIDO_V1
   '/inventario',
