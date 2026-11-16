@@ -52,23 +52,34 @@ function primerNombre(nombre) {
   return n ? n.charAt(0).toUpperCase() + n.slice(1).toLowerCase() : ''
 }
 
-// Mensaje según la etapa: por vencer, vence hoy, vencida. Tono cercano, sin presión.
+// Mensaje según la etapa: por vencer, vence hoy, vencida. Tono cercano, estructurado, sin emojis.
 function mensajeRenovacion(s) {
   const n = primerNombre(s.nombre)
   const plan = s.plan || 'tu plan'
   const d = Number(s.dias_restantes)
 
+  let apertura
   if (s.etapa === 'por_vencer') {
     const cuando = d === 1 ? 'mañana' : `en ${d} días`
-    return `Hola ${n}, ¿cómo vas con tu entrenamiento en MAK FITNESS? Te escribimos porque tu membresía (${plan}) vence ${cuando}, el ${fechaCorta(s.fecha_fin)}. Para que no pierdas tu ritmo ni tu progreso, puedes renovarla cuando gustes en recepción. Si tienes alguna duda o quieres cambiar de plan, cuéntanos. ¡Gracias por entrenar con nosotros!`
+    apertura = `Hola ${n}, desde *MAK FITNESS* queremos felicitarte por tu constancia. Tu membresía (${plan}) vence ${cuando}, el ${fechaCorta(s.fecha_fin)}, y queremos que sigas avanzando sin pausas.`
+  } else if (s.etapa === 'vence_hoy') {
+    apertura = `Hola ${n}, desde *MAK FITNESS* te recordamos que hoy vence tu membresía (${plan}). Renovando hoy mismo mantienes tu ritmo y todo lo que has logrado.`
+  } else {
+    const hace = Math.abs(d) === 1 ? '1 día' : `${Math.abs(d)} días`
+    apertura = `Hola ${n}, desde *MAK FITNESS* te extrañamos. Tu membresía (${plan}) venció hace ${hace}, pero retomar ahora es mucho más fácil que empezar de cero. Tu progreso te está esperando.`
   }
 
-  if (s.etapa === 'vence_hoy') {
-    return `Hola ${n}, hoy vence tu membresía (${plan}) en MAK FITNESS. Si quieres seguir entrenando sin pausas, puedes renovarla hoy mismo en recepción. ¿Tienes alguna consulta sobre los planes? Con gusto te ayudamos.`
-  }
-
-  const hace = Math.abs(d) === 1 ? '1 día' : `${Math.abs(d)} días`
-  return `Hola ${n}, ¿cómo estás? Tu membresía en MAK FITNESS venció hace ${hace} y queremos que sigas avanzando: retomar pronto es más fácil que empezar de cero. Si hubo algún inconveniente o quieres que revisemos otro plan, cuéntanos con confianza. Te esperamos.`
+  return [
+    apertura,
+    '',
+    '*Para que renovar sea más cómodo:*',
+    '- Aceptamos pagos con *tarjeta de crédito y débito*.',
+    '- Tenemos *planes preferenciales sin contratos* de *3, 6, 9 y 12 meses* para que planifiques tu entrenamiento y ahorres.',
+    '',
+    'Pasa por recepción y te asesoramos con el plan que mejor se ajuste a tus metas y a tu tiempo.',
+    '',
+    'Cuéntanos si tienes alguna duda, ¡aquí estamos para ayudarte! Tu mejor versión se construye día a día.',
+  ].join('\n')
 }
 
 const ETAPA = {
@@ -251,7 +262,7 @@ export default function PorRenovarPage() {
 
                 <details className="mt-3 text-sm text-gray-600">
                   <summary className="cursor-pointer font-semibold text-[#07838C]">Ver el mensaje que se enviará</summary>
-                  <p className="mt-2 rounded-lg bg-gray-50 p-3">{mensajeRenovacion(s)}</p>
+                  <p className="mt-2 whitespace-pre-line rounded-lg bg-gray-50 p-3">{mensajeRenovacion(s)}</p>
                 </details>
 
                 <div className="mt-3 flex flex-wrap gap-2">
