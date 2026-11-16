@@ -4,6 +4,7 @@ import EnviarAccesoMakButton from '@/components/EnviarAccesoMakButton'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { usePerfil } from '@/components/UserContext'
+import RegistroEntradaModal from '@/components/RegistroEntradaModal'
 import {
   Plus,
   Search,
@@ -23,6 +24,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  CalendarCheck,
 } from 'lucide-react'
 
 const supabase = createClient()
@@ -768,6 +770,7 @@ export default function MiembrosPage() {
 
 function MiembrosContenido({ perfil }) {
   const esEmpleado = perfil?.rol === 'empleado'
+  const [miembroEntrada, setMiembroEntrada] = useState(null)
 
   // MAK_COMUNICADOS_WHATSAPP_V1
   const puedeAdministrarComunicado =
@@ -2446,6 +2449,13 @@ function MiembrosContenido({ perfil }) {
       const texto = busqueda.toLowerCase().trim()
 
       if (esEmpleado) {
+        // Código único de 5 dígitos: coincidencia exacta (como en Asistencia)
+        if (/^\d{5}$/.test(texto)) {
+          return miembros
+            .filter((miembro) => String(miembro.codigo_acceso || '') === texto)
+            .slice(0, 1)
+        }
+
         if (texto.length < 2) return []
 
         return miembros
@@ -3651,7 +3661,7 @@ function MiembrosContenido({ perfil }) {
 
             <p className="text-sm text-gray-500">
               {esEmpleado
-                ? 'Busca por nombre, apellido, cédula o celular.'
+                ? 'Busca por nombre, apellido, cédula, celular o código de 5 dígitos. Enter registra la entrada si hay un solo resultado.'
                 : <>Total registrados: {miembros.length}</>}
             </p>
           </div>
@@ -3674,10 +3684,16 @@ function MiembrosContenido({ perfil }) {
                     .value
                 )
               }
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && miembrosFiltrados.length === 1 && busqueda.trim()) {
+                  e.preventDefault()
+                  setMiembroEntrada(miembrosFiltrados[0])
+                }
+              }}
               className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-4 text-sm outline-none focus:border-black"
               placeholder={
                 esEmpleado
-                  ? 'Nombre, apellido, cédula o celular'
+                  ? 'Código, nombre, apellido, cédula o celular'
                   : 'Buscar por código, nombre, cédula o teléfono'
               }
             />
@@ -3822,6 +3838,16 @@ function MiembrosContenido({ perfil }) {
                     </div>
 
                     <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMiembroEntrada(miembro)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-green-700 px-3 py-2 text-sm font-semibold text-white"
+                        title="Registrar entrada"
+                      >
+                        <CalendarCheck size={17} />
+                        Entrada
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => editarMiembro(miembro)}
@@ -4011,6 +4037,15 @@ function MiembrosContenido({ perfil }) {
                           <div className="flex justify-end gap-2">
                             <button
                               type="button"
+                              onClick={() => setMiembroEntrada(miembro)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-green-700 px-3 py-2 text-xs font-semibold text-white hover:bg-green-800"
+                              title="Registrar entrada"
+                            >
+                              <CalendarCheck size={15} />
+                              Entrada
+                            </button>
+                            <button
+                              type="button"
                               onClick={() =>
                                 editarMiembro(
                                   miembro
@@ -4149,6 +4184,14 @@ function MiembrosContenido({ perfil }) {
           </>
         )}
       </div>
+
+      {miembroEntrada && (
+        <RegistroEntradaModal
+          miembro={miembroEntrada}
+          onCerrar={() => setMiembroEntrada(null)}
+          onRegistrada={() => setBusqueda('')}
+        />
+      )}
     </div>
   )
 }
