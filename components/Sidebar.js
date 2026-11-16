@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   DollarSign,
   HeartHandshake,
+  Bell,
   Repeat,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
@@ -52,6 +53,12 @@ const navBase = [
     href: '/seguimiento',
     icon: HeartHandshake,
     label: 'Seguimiento',
+    roles: ['dueno', 'administrador', 'empleado'],
+  },
+  {
+    href: '/por-renovar',
+    icon: Bell,
+    label: 'Por renovar',
     roles: ['dueno', 'administrador', 'empleado'],
   },
   {
