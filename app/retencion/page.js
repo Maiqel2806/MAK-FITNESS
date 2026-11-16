@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, MessageCircle, ClipboardPen, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { enlaceWhatsApp } from '@/lib/telefono'
+import Paginacion, { paginar } from '@/components/Paginacion'
 
 const supabase = createClient()
 const ZONA = 'America/Guayaquil'
@@ -95,6 +96,7 @@ export default function RetencionPage() {
   const [ocultar, setOcultar] = useState(true)
   const [seleccionado, setSeleccionado] = useState(null)
   const [enviando, setEnviando] = useState({})
+  const [pagina, setPagina] = useState(1)
 
   const cargar = useCallback(async (m, mi, ma) => {
     setCargando(true)
@@ -156,6 +158,7 @@ export default function RetencionPage() {
   }
 
   const visibles = ocultar ? lista.filter((s) => !atendido(s)) : lista
+  const pag = paginar(visibles, pagina)
   const ocultos = lista.length - visibles.length
   const total = reporte?.total
   const porMes = reporte?.por_mes || []
@@ -265,7 +268,7 @@ export default function RetencionPage() {
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm font-semibold text-gray-700">
             Sin renovar desde hace
-            <select value={minDias} onChange={(e) => setMinDias(Number(e.target.value))} className="ml-2 rounded-xl border border-gray-300 px-3 py-2 text-sm">
+            <select value={minDias} onChange={(e) => { setMinDias(Number(e.target.value)); setPagina(1) }} className="ml-2 rounded-xl border border-gray-300 px-3 py-2 text-sm">
               {[15, 30, 45].map((d) => (
                 <option key={d} value={d}>
                   {d} días
@@ -275,7 +278,7 @@ export default function RetencionPage() {
           </label>
           <label className="text-sm font-semibold text-gray-700">
             hasta
-            <select value={maxDias} onChange={(e) => setMaxDias(Number(e.target.value))} className="ml-2 rounded-xl border border-gray-300 px-3 py-2 text-sm">
+            <select value={maxDias} onChange={(e) => { setMaxDias(Number(e.target.value)); setPagina(1) }} className="ml-2 rounded-xl border border-gray-300 px-3 py-2 text-sm">
               {[60, 90, 180, 365].map((d) => (
                 <option key={d} value={d}>
                   {d} días
@@ -284,7 +287,7 @@ export default function RetencionPage() {
             </select>
           </label>
           <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={ocultar} onChange={(e) => setOcultar(e.target.checked)} />
+            <input type="checkbox" checked={ocultar} onChange={(e) => { setOcultar(e.target.checked); setPagina(1) }} />
             Ocultar ya contactados
           </label>
         </div>
@@ -300,7 +303,7 @@ export default function RetencionPage() {
           <p className="rounded-xl bg-gray-50 p-5 text-sm text-gray-600">No hay socios pendientes de recuperar.</p>
         ) : (
           <div className="space-y-3">
-            {visibles.map((s) => {
+            {pag.items.map((s) => {
               const tieneWa = Boolean(enlaceWhatsApp(s.telefono, 'x'))
               return (
                 <div key={s.membresia_id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -352,6 +355,7 @@ export default function RetencionPage() {
                 </div>
               )
             })}
+            <Paginacion total={visibles.length} pagina={pag.actual} onCambiar={setPagina} />
           </div>
         )}
       </section>

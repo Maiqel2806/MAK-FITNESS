@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, MessageCircle, ClipboardPen, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { enlaceWhatsApp } from '@/lib/telefono'
+import Paginacion, { paginar } from '@/components/Paginacion'
 
 const supabase = createClient()
 const ZONA = 'America/Guayaquil'
@@ -98,6 +99,7 @@ export default function PorRenovarPage() {
   const [ocultar, setOcultar] = useState(true)
   const [seleccionado, setSeleccionado] = useState(null)
   const [enviando, setEnviando] = useState({})
+  const [pagina, setPagina] = useState(1)
 
   const cargar = useCallback(async (a, d) => {
     setCargando(true)
@@ -155,6 +157,7 @@ export default function PorRenovarPage() {
   }
 
   const visibles = ocultar ? lista.filter((s) => !atendido(s)) : lista
+  const pag = paginar(visibles, pagina)
   const ocultos = lista.length - visibles.length
   const cuenta = (et) => visibles.filter((s) => s.etapa === et).length
 
@@ -190,7 +193,7 @@ export default function PorRenovarPage() {
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-sm font-semibold text-gray-700">
           Vencen en los próximos
-          <select value={antes} onChange={(e) => setAntes(Number(e.target.value))} className="ml-2 rounded-xl border border-gray-300 px-3 py-2 text-sm">
+          <select value={antes} onChange={(e) => { setAntes(Number(e.target.value)); setPagina(1) }} className="ml-2 rounded-xl border border-gray-300 px-3 py-2 text-sm">
             {[1, 2, 3, 5, 7, 10].map((d) => (
               <option key={d} value={d}>
                 {d} días
@@ -200,7 +203,7 @@ export default function PorRenovarPage() {
         </label>
         <label className="text-sm font-semibold text-gray-700">
           Vencidos hace hasta
-          <select value={despues} onChange={(e) => setDespues(Number(e.target.value))} className="ml-2 rounded-xl border border-gray-300 px-3 py-2 text-sm">
+          <select value={despues} onChange={(e) => { setDespues(Number(e.target.value)); setPagina(1) }} className="ml-2 rounded-xl border border-gray-300 px-3 py-2 text-sm">
             {[3, 7, 15, 30].map((d) => (
               <option key={d} value={d}>
                 {d} días
@@ -209,7 +212,7 @@ export default function PorRenovarPage() {
           </select>
         </label>
         <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={ocultar} onChange={(e) => setOcultar(e.target.checked)} />
+          <input type="checkbox" checked={ocultar} onChange={(e) => { setOcultar(e.target.checked); setPagina(1) }} />
           Ocultar ya contactados
         </label>
         <button type="button" onClick={() => cargar(antes, despues)} disabled={cargando} className="ml-auto inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50">
@@ -229,7 +232,7 @@ export default function PorRenovarPage() {
         <p className="rounded-xl bg-gray-50 p-5 text-sm text-gray-600">No hay socios pendientes de recordatorio.</p>
       ) : (
         <div className="space-y-3">
-          {visibles.map((s) => {
+          {pag.items.map((s) => {
             const tieneWa = Boolean(enlaceWhatsApp(s.telefono, 'x'))
             const et = ETAPA[s.etapa]
             return (
@@ -287,6 +290,7 @@ export default function PorRenovarPage() {
               </div>
             )
           })}
+          <Paginacion total={visibles.length} pagina={pag.actual} onCambiar={setPagina} />
         </div>
       )}
 
