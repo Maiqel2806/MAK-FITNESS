@@ -17,6 +17,7 @@ const rutasEmpleado = [
   '/miembros',
   '/membresias',
   '/asistencia',
+  '/seguimiento',
   '/registro-colaboradores',
   '/caja/diaria', // MAK_ARQUEO_COMPARTIDO_V1
   '/inventario',

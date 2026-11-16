@@ -19,6 +19,8 @@ import {
   UserCog,
   ShieldCheck,
   DollarSign,
+  HeartHandshake,
+  Repeat,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 
@@ -45,6 +47,18 @@ const navBase = [
     icon: CreditCard,
     label: 'Membresías',
     roles: ['dueno', 'administrador', 'empleado'],
+  },
+  {
+    href: '/seguimiento',
+    icon: HeartHandshake,
+    label: 'Seguimiento',
+    roles: ['dueno', 'administrador', 'empleado'],
+  },
+  {
+    href: '/renovaciones',
+    icon: Repeat,
+    label: 'Renovaciones del día',
+    roles: ['dueno', 'administrador'],
   },
   {
     href: '/asistencia',
